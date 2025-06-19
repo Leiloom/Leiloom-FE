@@ -1,20 +1,7 @@
 import { api } from './api'
+import { Plan } from '@/types/plan'
 
-export interface Plan {
-  id?: string
-  name: string
-  description?: string
-  price: number
-  numberOfUsers: number
-  durationDays: number
-  isActive: boolean
-  isTrial: boolean
-}
-
-/**
- * Cria um novo plano
- */
-export async function createPlan(data: Plan) {
+export async function createPlan(data: Omit<Plan, 'id'>) {
   try {
     const response = await api.post('/plans', data)
     return response.data

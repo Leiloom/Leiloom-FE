@@ -54,8 +54,8 @@ export default function Navbar() {
           {/* Só mostra menus específicos após carregar e confirmar contexto */}
           {!isLoading && user?.context === 'CLIENT' && (
           <>
-            <Link href="#" className="hover:text-yellow-400 transition">
-              Opção Cliente
+            <Link href="users" className="hover:text-yellow-400 transition">
+              Usuários
             </Link>
           </>
         )}

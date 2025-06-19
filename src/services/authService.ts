@@ -1,6 +1,92 @@
 import { api } from './api'
 
 /**
+ * Handler centralizado para tratamento de erros de autenticação
+ * Mapeia mensagens específicas do backend para UX melhor
+ */
+export function handleAuthError(error: any, defaultMessage: string = 'Erro ao realizar operação.') {
+  const backendMessage = error?.response?.data?.message
+  const status = error?.response?.status
+
+  // Mapeamento de mensagens específicas do AuthService para UX melhor
+  const messageMap: Record<string, string> = {
+    'Usuário não encontrado.': 'Email, CPF ou CNPJ não encontrado.',
+    'Usuário ainda não confirmou o e-mail.': 'Confirme seu email antes de fazer login.',
+    'Usuário inativo. Entre em contato com o administrador.': 'Sua conta está inativa. Entre em contato com o suporte.',
+    'Conta ainda não aprovada.': 'Sua conta ainda está pendente de aprovação.',
+    'Credenciais inválidas.': 'Senha incorreta.',
+    'Contexto de login inválido.': 'Erro no sistema. Tente novamente.',
+    'Código inválido ou expirado.': 'Código de verificação inválido ou expirado.',
+    'Senha atual incorreta.': 'A senha atual informada está incorreta.',
+    'Token inválido ou expirado.': 'Link de redefinição expirado. Solicite um novo.',
+    'Usuário já confirmado': 'Esta conta já foi confirmada anteriormente.',
+    'Código inválido': 'Código de confirmação inválido.',
+    'Usuário cliente não encontrado.': 'Email não encontrado no sistema.',
+  }
+
+  switch (status) {
+    case 400:
+      return Promise.reject({ 
+        message: messageMap[backendMessage] || backendMessage || 'Dados inválidos. Verifique os campos preenchidos.' 
+      })
+
+    case 401:
+      const userMessage = backendMessage && messageMap[backendMessage] 
+        ? messageMap[backendMessage] 
+        : (backendMessage || 'Email/CPF/CNPJ ou senha incorretos.')
+      return Promise.reject({ message: userMessage })
+
+    case 403:
+      return Promise.reject({ 
+        message: backendMessage || 'Acesso negado. Verifique suas permissões.' 
+      })
+
+    case 404:
+      return Promise.reject({ 
+        message: messageMap[backendMessage] || backendMessage || 'Recurso não encontrado.' 
+      })
+
+    case 409:
+      return Promise.reject({ 
+        message: backendMessage || 'Conflito de dados. Este email já está em uso.' 
+      })
+
+    case 422:
+      return Promise.reject({ 
+        message: backendMessage || 'Dados inválidos. Verifique os campos preenchidos.' 
+      })
+
+    case 429:
+      return Promise.reject({ 
+        message: 'Muitas tentativas. Tente novamente em alguns minutos.' 
+      })
+
+    case 500:
+      return Promise.reject({ 
+        message: 'Erro interno do servidor. Tente novamente mais tarde.' 
+      })
+
+    case 503:
+      return Promise.reject({ 
+        message: 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.' 
+      })
+
+    default:
+      // Para erros de rede (sem response)
+      if (!error?.response) {
+        return Promise.reject({ 
+          message: 'Erro de conexão. Verifique sua internet e tente novamente.' 
+        })
+      }
+
+      // Fallback final
+      return Promise.reject({ 
+        message: messageMap[backendMessage] || backendMessage || defaultMessage 
+      })
+  }
+}
+
+/**
  * Interface para o payload de login de cliente
  */
 interface LoginClientPayload {
@@ -15,27 +101,14 @@ interface LoginClientPayload {
  * Realiza o login de um cliente
  * @param data Dados de login do cliente
  * @returns Token de acesso
- * @throws Objeto de erro com mensagem formatada de acordo com o status HTTP
+ * @throws Objeto de erro com mensagem formatada de acordo com o backend
  */
 export async function loginClient(data: LoginClientPayload) {
   try {
     const response = await api.post('/auth/login-client', data)
     return response.data.access_token
   } catch (error: any) {
-    if (error?.response?.status === 401) {
-      return Promise.reject({ message: 'Login ou senha inválidos.' })
-    }
-    if (error?.response?.status === 403) {
-      return Promise.reject({ message: 'Acesso negado.' })
-    }
-    if (error?.response?.status === 409) {
-      return Promise.reject({ message: 'Este e-mail já está em uso.' })
-    }
-    if (error?.response?.status === 500) { 
-      return Promise.reject({ message: 'Erro interno do servidor.' })
-    }
-    // Captura outros erros não mapeados
-    return Promise.reject({ message: 'Erro ao realizar login.' })
+    return handleAuthError(error, 'Erro ao realizar login.')
   }
 }
 
@@ -52,27 +125,14 @@ interface BackOfficePayload {
  * Realiza o login no BackOffice
  * @param payload Dados de login do BackOffice
  * @returns Token de acesso
- * @throws Objeto de erro com mensagem formatada de acordo com o status HTTP
+ * @throws Objeto de erro com mensagem formatada de acordo com o backend
  */
 export async function loginBackOffice(payload: BackOfficePayload) {
   try {
     const response = await api.post('/auth/login-backoffice', payload)
     return response.data.access_token
   } catch (error: any) {
-    if (error?.response?.status === 401) {
-      return Promise.reject({ message: 'Login ou senha inválidos.' })
-    }
-    if (error?.response?.status === 403) {
-      return Promise.reject({ message: 'Acesso negado.' })
-    }
-    if (error?.response?.status === 409) {
-      return Promise.reject({ message: 'Este e-mail já está em uso.' })
-    }
-    if (error?.response?.status === 500) { 
-      return Promise.reject({ message: 'Erro interno do servidor.' })
-    }
-    // Captura outros erros não mapeados
-    return Promise.reject({ message: 'Erro ao realizar login.' })
+    return handleAuthError(error, 'Erro ao realizar login administrativo.')
   }
 }
 
@@ -81,15 +141,14 @@ export async function loginBackOffice(payload: BackOfficePayload) {
  * @param email Email do usuário
  * @param code Código de verificação enviado ao email
  * @returns Dados da verificação
- * @throws Objeto de erro com mensagem padrão
+ * @throws Objeto de erro com mensagem formatada
  */
 export async function verifyEmailCode(email: string, code: string) {
   try {
     const response = await api.post('/auth/verify-email-code', { email, code })
     return response.data
   } catch (error: any) {
-    console.error('Erro ao verificar código de email:', error)
-    return Promise.reject({ message: 'Erro ao registrar usuário.' })
+    return handleAuthError(error, 'Erro ao verificar código de email.')
   }
 }
 
@@ -97,18 +156,14 @@ export async function verifyEmailCode(email: string, code: string) {
  * Solicita recuperação de senha
  * @param data Objeto contendo email e contexto de aplicação
  * @returns Dados da solicitação de recuperação
- * @throws Erro em caso de falha na requisição
+ * @throws Erro com mensagem formatada do backend
  */
 export async function forgotPassword(data: { email: string; context: 'CLIENT' | 'BACKOFFICE' }) {
   try {
     const response = await api.post('/auth/forgot-password', data)
     return response.data
   } catch (error: any) {
-    console.error('Erro ao solicitar recuperação de senha:', error)
-    if (error?.response?.status === 404) {
-      return Promise.reject({ message: 'Email não encontrado.' })
-    }
-    return Promise.reject({ message: 'Erro ao processar solicitação de recuperação de senha.' })
+    return handleAuthError(error, 'Erro ao solicitar recuperação de senha.')
   }
 }
 
@@ -116,17 +171,14 @@ export async function forgotPassword(data: { email: string; context: 'CLIENT' | 
  * Valida um token de redefinição de senha
  * @param token Token de redefinição de senha
  * @returns Dados da validação do token
- * @throws Erro em caso de falha na requisição
+ * @throws Erro com mensagem formatada do backend
  */
 export async function validateResetToken(token: string) {
   try {
-    return await api.get(`/auth/validate-reset-token?token=${token}`)
+    const response = await api.get(`/auth/validate-reset-token?token=${token}`)
+    return response.data
   } catch (error: any) {
-    console.error('Erro ao validar token de redefinição:', error)
-    if (error?.response?.status === 400 || error?.response?.status === 404) {
-      return Promise.reject({ message: 'Token inválido ou expirado.' })
-    }
-    return Promise.reject({ message: 'Erro ao validar token de redefinição de senha.' })
+    return handleAuthError(error, 'Erro ao validar token de redefinição.')
   }
 }
 
@@ -134,7 +186,7 @@ export async function validateResetToken(token: string) {
  * Redefine a senha do usuário usando um token de redefinição
  * @param payload Objeto contendo token, código e nova senha
  * @returns Dados da redefinição de senha
- * @throws Erro em caso de falha na requisição
+ * @throws Erro com mensagem formatada do backend
  */
 export async function resetPassword(payload: {
   token: string
@@ -142,46 +194,34 @@ export async function resetPassword(payload: {
   newPassword: string
 }) {
   try {
-    return await api.post('/auth/reset-password', payload)
+    const response = await api.post('/auth/reset-password', payload)
+    return response.data
   } catch (error: any) {
-    console.error('Erro ao redefinir senha:', error)
-    if (error?.response?.status === 400) {
-      return Promise.reject({ message: 'Dados inválidos para redefinição de senha.' })
-    }
-    if (error?.response?.status === 404) {
-      return Promise.reject({ message: 'Token ou código inválido.' })
-    }
-    return Promise.reject({ message: 'Erro ao redefinir senha.' })
+    return handleAuthError(error, 'Erro ao redefinir senha.')
   }
 }
 
 /**
- * Solicita alteração de senha do usuário logado (versão que aceita user como parâmetro)
- * @param user Dados do usuário do contexto
+ * Solicita alteração de senha do usuário logado
+ * @param user Dados do usuário do contexto (opcional para compatibilidade)
  * @returns Dados da solicitação de alteração de senha
- * @throws Erro em caso de falha na requisição
+ * @throws Erro com mensagem formatada do backend
  */
 export async function requestChangePassword(user?: any) {
   try {
     const response = await api.post('/auth/change-password-request')
     return response.data
   } catch (error: any) {
-    console.error('Erro ao solicitar alteração de senha:', error)
-    if (error?.response?.status === 401) {
-      return Promise.reject({ message: 'Usuário não autenticado.' })
-    }
-    return Promise.reject({ message: 'Erro ao solicitar alteração de senha.' })
+    return handleAuthError(error, 'Erro ao solicitar alteração de senha.')
   }
 }
 
-
-
 /**
- * Altera a senha do usuário logado (versão que aceita user como parâmetro)
- * @param user Dados do usuário do contexto  
+ * Altera a senha do usuário logado
+ * @param user Dados do usuário do contexto (opcional para compatibilidade)
  * @param payload Objeto contendo senha atual, código e nova senha
  * @returns Dados da alteração de senha
- * @throws Erro em caso de falha na requisição
+ * @throws Erro com mensagem formatada do backend
  */
 export async function changePassword(user: any, payload: {
   currentPassword: string
@@ -192,15 +232,6 @@ export async function changePassword(user: any, payload: {
     const response = await api.post('/auth/change-password', payload)
     return response.data
   } catch (error: any) {
-    console.error('Erro ao alterar senha:', error)
-    if (error?.response?.status === 400) {
-      return Promise.reject({ message: 'Dados inválidos para alteração de senha.' })
-    }
-    if (error?.response?.status === 401) {
-      return Promise.reject({ message: 'Senha atual incorreta ou código inválido.' })
-    }
-    return Promise.reject({ message: 'Erro ao alterar senha.' })
+    return handleAuthError(error, 'Erro ao alterar senha.')
   }
 }
-
-

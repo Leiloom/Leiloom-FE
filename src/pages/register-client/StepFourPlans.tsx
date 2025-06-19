@@ -1,29 +1,28 @@
 'use client'
 
 import { useRegisterClient } from '@/contexts/RegisterClientContext'
-import { loginClient } from '@/services/authService'
-import { acceptTerms, getCurrentTerms } from '@/services/termsService'
-import { getActivePlans, Plan } from '@/services/planService'
-import { createClientPlan } from '@/services/clientPlanService'
-import { createClientPeriodPlan, calculateExpirationDate } from '@/services/clientPeriodPlanService'
+import { getActivePlans } from '@/services/planService'
 import { toast } from 'react-toastify'
-import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { updateClientUser, updateClient } from '@/services/clientService'
+import { useRouter } from 'next/navigation'
 import { useAuthContext } from '@/contexts/AuthContext'
+import { Plan } from '@/types/plan' 
 
-interface StepThreePlansProps {
+interface StepFourPlansProps {
   onBack: () => void
+  onNext?: (selectedPlan: Plan) => void // Callback para ir ao step de pagamento
 }
 
-export default function StepFourPlans({ onBack }: StepThreePlansProps) {
+export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
   const { formData } = useRegisterClient()
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [plansLoading, setPlansLoading] = useState(true)
   const [plans, setPlans] = useState<Plan[]>([])
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null) 
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+
+  // Imports necessários para fallback (planos trial)
   const { login } = useAuthContext()
+  const router = useRouter()
 
   // Carrega os planos ativos da API
   useEffect(() => {
@@ -45,9 +44,7 @@ export default function StepFourPlans({ onBack }: StepThreePlansProps) {
 
   // Função para formatar o preço
   function formatPrice(price: number): string {
-    if (price === 0) {
-      return 'Grátis'
-    }
+    if (price === 0) return 'Grátis'
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
@@ -60,7 +57,7 @@ export default function StepFourPlans({ onBack }: StepThreePlansProps) {
     
     if (plan.numberOfUsers === 1) {
       features.push('1 usuário')
-    } else if (plan.numberOfUsers > 100) {
+    } else if ((plan.numberOfUsers ?? 1) > 100) {
       features.push('Usuários ilimitados')
     } else {
       features.push(`${plan.numberOfUsers} usuários`)
@@ -83,88 +80,41 @@ export default function StepFourPlans({ onBack }: StepThreePlansProps) {
     return features
   }
 
-  async function handleFinish() {
+  function handleContinue() {
     if (!selectedPlan) {
       toast.error('Selecione um plano para continuar.')
       return
     }
 
-    if (!formData.acceptTerms) {
-      toast.error('Você precisa aceitar os termos.')
+    if (onNext && typeof onNext === 'function') {
+      onNext(selectedPlan)
       return
     }
 
-    if (!formData.clientId || !selectedPlan.id) {
-      toast.error('Dados insuficientes para criar a associação.')
-      return
+    handleLegacyFlow()
+  }
+
+  async function handleLegacyFlow() {
+    if (!selectedPlan) return
+
+    if (selectedPlan.isTrial) {
+      await handleTrialFinish()
+    } else {
+      toast.error('Erro na configuração do fluxo de pagamento. Tente novamente.')
+      console.warn('Plano pago selecionado mas sem callback onNext configurado')
     }
+  }
+
+  async function handleTrialFinish() {
+    if (!selectedPlan || !formData.clientId) return
 
     setLoading(true)
-    try {
-      // 1. Atualiza dados do cliente
-      await updateClientUser(
-        formData.clientUserId, 
-        formData.companyName, 
-        formData.email, 
-        formData.cpfCnpj, 
-        formData.phone, 
-        formData.password
-      )
-      await updateClient(formData.clientId, formData.companyName, formData.cpfCnpj)
-      
-      // 2. Aceita os termos
-      const currentTerms = await getCurrentTerms()
-      if (!currentTerms) {
-        toast.error('Nenhum termo de uso disponível.')
-        return
-      }
-      
-      await acceptTerms({
-        clientUserId: formData.clientUserId!,
-        termsId: currentTerms.id,
-      })
-
-      // 3. Cria a associação Cliente ↔ Plano
-      const clientPlan = await createClientPlan({
-        clientId: formData.clientId,
-        planId: selectedPlan.id
-      })
-
-      // 4. Cria o período do plano
-      const startDate = new Date()
-      const expirationDate = calculateExpirationDate(startDate, selectedPlan.durationDays)
-      
-      await createClientPeriodPlan({
-        clientPlanId: clientPlan.id!,
-        startsAt: startDate,
-        expiresAt: expirationDate,
-        isTrial: selectedPlan.isTrial,
-        isCurrent: true,
-        wasConfirmed: selectedPlan.isTrial // Se é trial, já confirma automaticamente
-      })
-
-      // 5. Faz login do cliente
-      const token = await loginClient({
-        login: formData.email,
-        password: formData.password,
-        context: 'CLIENT',
-      })
-      
-      // ✅ Usa apenas a função login do AuthContext (remove localStorage duplicado)
-      login(token, 'CLIENT') 
-
-      toast.success('Conta criada com sucesso!')
-      
-      // Redireciona baseado no tipo de plano
-      if (selectedPlan.isTrial) {
-        router.push('/dashboard-client')
-      } else {
-        // Para planos pagos, pode redirecionar para página de pagamento
-        router.push('/dashboard-client?newPlan=true')
-      }
+    try {     
+      toast.success('Plano trial ativado!')
+      router.push('/dashboard-client')
     } catch (err: any) {
-      console.error('Erro no registro:', err)
-      toast.error(err?.message || 'Erro ao concluir o cadastro.')
+      console.error('Erro:', err)
+      toast.error(err?.message || 'Erro ao ativar plano trial.')
     } finally {
       setLoading(false)
     }
@@ -226,6 +176,7 @@ export default function StepFourPlans({ onBack }: StepThreePlansProps) {
         <p className="text-gray-600">Selecione o plano que melhor atende às suas necessidades.</p>
       </div>
 
+      {/* Lista de Planos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {plans.map((plan) => (
           <button
@@ -269,6 +220,11 @@ export default function StepFourPlans({ onBack }: StepThreePlansProps) {
                   Teste Grátis
                 </span>
               )}
+              {plan.allowInstallments && !plan.isTrial && (
+                <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                  Até {plan.maxInstallments}x
+                </span>
+              )}
               <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
                 {plan.durationDays} dias
               </span>
@@ -290,7 +246,7 @@ export default function StepFourPlans({ onBack }: StepThreePlansProps) {
           Voltar
         </button>
         <button
-          onClick={handleFinish}
+          onClick={handleContinue}
           disabled={!selectedPlan || loading}
           className={`px-6 py-2 rounded font-medium transition ${
             selectedPlan && !loading
@@ -298,16 +254,10 @@ export default function StepFourPlans({ onBack }: StepThreePlansProps) {
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
           }`}
         >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-              Finalizando...
-            </span>
-          ) : selectedPlan?.isTrial ? (
-            'Iniciar Período Gratuito'
-          ) : (
-            'Concluir Cadastro'
-          )}
+          {selectedPlan?.isTrial 
+            ? 'Iniciar Período Gratuito' 
+            : 'Escolher Forma de Pagamento'
+          }
         </button>
       </div>
     </div>
