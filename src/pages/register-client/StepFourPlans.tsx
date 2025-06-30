@@ -5,12 +5,13 @@ import { getActivePlans } from '@/services/planService'
 import { toast } from 'react-toastify'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthContext } from '@/contexts/AuthContext'
-import { Plan } from '@/types/plan' 
+import { Plan } from '@/types/plan'
+import { acceptTerms, getCurrentTerms } from '@/services/termsService'
+import { createSubscriptionOnly } from '@/services/paymentService'
 
 interface StepFourPlansProps {
   onBack: () => void
-  onNext?: (selectedPlan: Plan) => void // Callback para ir ao step de pagamento
+  onNext?: (selectedPlan: Plan) => void
 }
 
 export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
@@ -20,11 +21,9 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
   const [plans, setPlans] = useState<Plan[]>([])
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
 
-  // Imports necessários para fallback (planos trial)
-  const { login } = useAuthContext()
+
   const router = useRouter()
 
-  // Carrega os planos ativos da API
   useEffect(() => {
     async function loadPlans() {
       try {
@@ -42,7 +41,6 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
     loadPlans()
   }, [])
 
-  // Função para formatar o preço
   function formatPrice(price: number): string {
     if (price === 0) return 'Grátis'
     return new Intl.NumberFormat('pt-BR', {
@@ -51,10 +49,9 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
     }).format(price)
   }
 
-  // Função para gerar features baseadas nos dados do plano
   function generateFeatures(plan: Plan): string[] {
     const features = []
-    
+
     if (plan.numberOfUsers === 1) {
       features.push('1 usuário')
     } else if ((plan.numberOfUsers ?? 1) > 100) {
@@ -80,45 +77,63 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
     return features
   }
 
+
+
   function handleContinue() {
     if (!selectedPlan) {
       toast.error('Selecione um plano para continuar.')
       return
     }
+    if (selectedPlan.isTrial) {
+      handleTrialFinish()
+    } else {
+      if (onNext && typeof onNext === 'function') {
+        onNext(selectedPlan)
+      }
+    }
+  }
 
-    if (onNext && typeof onNext === 'function') {
-      onNext(selectedPlan)
+
+async function handleTrialFinish() {
+  if (!selectedPlan || !formData.clientId) return
+
+  setLoading(true)
+  try {
+    // 2. Aceita os termos
+    const currentTerms = await getCurrentTerms()
+    if (!currentTerms) {
+      toast.error('Nenhum termo de uso disponível.')
       return
     }
 
-    handleLegacyFlow()
+    await acceptTerms({
+      clientUserId: formData.clientUserId!,
+      termsId: currentTerms.id,
+    })
+
+    // 3. Cria assinatura trial usando o sistema existente
+    // O PaymentService já deve detectar que é trial (plan.isTrial) e:
+    // - Criar ClientPlan com totalAmount: 0
+    // - Criar ClientPeriodPlan com isTrial: true  
+    // - Criar Payment com valor 0 (se necessário)
+    // - Marcar como pago automaticamente
+    const subscriptionData = await createSubscriptionOnly({
+      planId: selectedPlan.id,
+      installments: 1, // Trial sempre 1x
+      paymentMethod: 'PIX' // Qualquer um, já que é grátis
+    })
+
+
+    // 5. Sucesso - redireciona com parâmetro de nova assinatura
+    router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'trial-created'}`)
+    
+  } catch (err: any) {
+    console.error('Erro:', err)
+    toast.error(err?.message || 'Erro ao ativar plano trial.')
+  } finally {
+    setLoading(false)
   }
-
-  async function handleLegacyFlow() {
-    if (!selectedPlan) return
-
-    if (selectedPlan.isTrial) {
-      await handleTrialFinish()
-    } else {
-      toast.error('Erro na configuração do fluxo de pagamento. Tente novamente.')
-      console.warn('Plano pago selecionado mas sem callback onNext configurado')
-    }
-  }
-
-  async function handleTrialFinish() {
-    if (!selectedPlan || !formData.clientId) return
-
-    setLoading(true)
-    try {     
-      toast.success('Plano trial ativado!')
-      router.push('/dashboard-client')
-    } catch (err: any) {
-      console.error('Erro:', err)
-      toast.error(err?.message || 'Erro ao ativar plano trial.')
-    } finally {
-      setLoading(false)
-    }
-  }
+}
 
   if (plansLoading) {
     return (
@@ -133,11 +148,10 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
           <button
             onClick={onBack}
             disabled={loading}
-            className={`text-sm transition ${
-              loading 
-                ? 'text-gray-400 cursor-not-allowed' 
+            className={`text-sm transition ${loading
+                ? 'text-gray-400 cursor-not-allowed'
                 : 'text-gray-600 hover:underline'
-            }`}
+              }`}
           >
             Voltar
           </button>
@@ -157,11 +171,10 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
           <button
             onClick={onBack}
             disabled={loading}
-            className={`text-sm transition ${
-              loading 
-                ? 'text-gray-400 cursor-not-allowed' 
+            className={`text-sm transition ${loading
+                ? 'text-gray-400 cursor-not-allowed'
                 : 'text-gray-600 hover:underline'
-            }`}
+              }`}
           >
             Voltar
           </button>
@@ -184,11 +197,10 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
             type="button"
             onClick={() => setSelectedPlan(plan)}
             disabled={loading}
-            className={`border rounded-lg p-4 text-gray-600 text-left shadow-sm transition hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
-              selectedPlan?.id === plan.id
+            className={`border rounded-lg p-4 text-gray-600 text-left shadow-sm transition hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${selectedPlan?.id === plan.id
                 ? 'border-yellow-500 bg-yellow-50'
                 : 'border-gray-300 hover:border-gray-400'
-            }`}
+              }`}
           >
             <div className="flex justify-between items-start mb-2">
               <h3 className="text-lg font-bold">{plan.name}</h3>
@@ -202,18 +214,18 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
                 </div>
               )}
             </div>
-            
+
             <p className="text-yellow-600 font-medium mb-3">
               {formatPrice(plan.price)}
               {plan.price > 0 && '/mês'}
             </p>
-            
+
             <ul className="text-sm text-gray-600 list-disc list-inside space-y-1 mb-3">
               {generateFeatures(plan).map((feature, index) => (
                 <li key={index}>{feature}</li>
               ))}
             </ul>
-            
+
             <div className="flex flex-wrap gap-1">
               {plan.isTrial && (
                 <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
@@ -237,25 +249,23 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
         <button
           onClick={onBack}
           disabled={loading}
-          className={`text-sm transition ${
-            loading 
-              ? 'text-gray-400 cursor-not-allowed' 
+          className={`text-sm transition ${loading
+              ? 'text-gray-400 cursor-not-allowed'
               : 'text-gray-600 hover:underline'
-          }`}
+            }`}
         >
           Voltar
         </button>
         <button
           onClick={handleContinue}
           disabled={!selectedPlan || loading}
-          className={`px-6 py-2 rounded font-medium transition ${
-            selectedPlan && !loading
+          className={`px-6 py-2 rounded font-medium transition ${selectedPlan && !loading
               ? 'bg-yellow-400 text-black hover:bg-yellow-300 shadow-sm'
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
+            }`}
         >
-          {selectedPlan?.isTrial 
-            ? 'Iniciar Período Gratuito' 
+          {selectedPlan?.isTrial
+            ? 'Iniciar Período Gratuito'
             : 'Escolher Forma de Pagamento'
           }
         </button>

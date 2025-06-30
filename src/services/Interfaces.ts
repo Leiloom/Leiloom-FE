@@ -17,6 +17,7 @@ export default interface Client {
   id?: string
   name: string
   cpfCnpj: string
+  email: string
   cep?: string
   street?: string
   number?: string
@@ -37,6 +38,7 @@ export default interface ClientReduced {
   id?: string
   name: string
   cpfCnpj: string
+  email: string
   cep?: string
   street?: string
   number?: string

@@ -48,7 +48,7 @@ function DashboardClient({ user }: Props) {
         getDetailedPaymentSummary(),
         getPendingInstallments()
       ])
-      console.log('effe',paymentResult)
+
       if (dashboardResult.status === 'fulfilled') {
         setDashboardData(dashboardResult.value)
       } else {
@@ -56,14 +56,12 @@ function DashboardClient({ user }: Props) {
       }
 
       if (paymentResult.status === 'fulfilled') {
-        console.log(paymentSummary);
         setPaymentSummary(paymentResult.value)
       } else {
         console.error('Erro ao carregar resumo de pagamentos:', paymentResult.reason)
       }
 
       if (installmentsResult.status === 'fulfilled') {
-        console.log(installmentsResult.value);
         setPendingInstallments(installmentsResult.value)
       } else {
         console.error('Erro ao carregar parcelas pendentes:', installmentsResult.reason)
@@ -75,6 +73,11 @@ function DashboardClient({ user }: Props) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Função para verificar se é trial
+  const isTrialUser = () => {
+    return paymentSummary?.currentPlan?.period?.isTrial || false
   }
 
   // Função para formatar preço
@@ -99,6 +102,47 @@ function DashboardClient({ user }: Props) {
     return diffDays
   }
 
+  // Lógica do próximo vencimento (trial vs pagamento)
+  const getNextDueInfo = () => {
+    if (loading) return { type: 'loading' }
+    
+    // Se é trial, mostra expiração do trial
+    if (isTrialUser() && paymentSummary?.currentPlan?.period?.expiresAt) {
+      const trialExpiresAt = paymentSummary.currentPlan.period.expiresAt
+      const daysUntilExpiration = getDaysUntilDue(trialExpiresAt)
+      
+      return {
+        type: 'trial',
+        days: daysUntilExpiration,
+        date: trialExpiresAt,
+        message: 'Trial expira em'
+      }
+    }
+    
+    // Se não é trial e tem próximo vencimento
+    if (paymentSummary?.nextDueDate) {
+      const daysUntilDue = getDaysUntilDue(paymentSummary.nextDueDate)
+      
+      return {
+        type: 'payment',
+        days: daysUntilDue,
+        date: paymentSummary.nextDueDate,
+        message: 'Próxima parcela em'
+      }
+    }
+    
+    // Não tem vencimentos
+    return { type: 'none' }
+  }
+
+  // Filtrar parcelas pendentes para trials
+  const getFilteredPendingInstallments = () => {
+    if (isTrialUser()) {
+      return [] // Trial não tem parcelas pendentes
+    }
+    return pendingInstallments
+  }
+
   const getAccountStatus = () => {
     if (!paymentSummary?.currentPlan) return { text: 'Inativo', color: 'text-red-600' }
     
@@ -118,11 +162,29 @@ function DashboardClient({ user }: Props) {
   }
 
   const getPaymentAlert = () => {
-    if ((paymentSummary?.overdueAmount??0) > 0) {
+    // Se é trial e está expirando
+    if (isTrialUser() && paymentSummary?.currentPlan?.period?.expiresAt) {
+      const expiresAt = paymentSummary.currentPlan.period.expiresAt
+      const daysLeft = getDaysUntilDue(expiresAt)
+      
+      if (daysLeft <= 7) {
+        return {
+          type: 'info' as const,
+          title: 'Trial Expirando',
+          message: `Seu período gratuito expira em ${daysLeft} ${daysLeft === 1 ? 'dia' : 'dias'}.`,
+          action: 'Escolher Plano'
+        }
+      }
+      
+      return null // Trial com mais de 7 dias, não mostra alerta
+    }
+    
+    // Resto da lógica original para planos pagos
+    if ((paymentSummary?.overdueAmount ?? 0) > 0) {
       return {
         type: 'error' as const,
         title: 'Pagamento em Atraso',
-        message: `Você possui ${formatPrice(paymentSummary?.overdueAmount??0)} em atraso.`,
+        message: `Você possui ${formatPrice(paymentSummary?.overdueAmount ?? 0)} em atraso.`,
         action: 'Pagar Agora'
       }
     }
@@ -141,24 +203,12 @@ function DashboardClient({ user }: Props) {
       }
     }
     
-    if (paymentSummary?.currentPlan?.period?.isTrial) {
-      const expiresAt = paymentSummary.currentPlan.period.expiresAt
-      const daysLeft = getDaysUntilDue(expiresAt)
-      
-      if (daysLeft <= 7) {
-        return {
-          type: 'info' as const,
-          title: 'Trial Expirando',
-          message: `Seu período gratuito expira em ${daysLeft} ${daysLeft === 1 ? 'dia' : 'dias'}.`,
-          action: 'Escolher Plano'
-        }
-      }
-    }
-    
     return null
   }
 
   const alert = getPaymentAlert()
+  const dueInfo = getNextDueInfo()
+  const filteredInstallments = getFilteredPendingInstallments()
 
   return (
     <MainLayout>
@@ -315,29 +365,36 @@ function DashboardClient({ user }: Props) {
               </div>
             </div>
 
-            {/* Próximo Vencimento */}
+            {/* Próximo Vencimento / Trial Expira */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Próximo Vencimento</p>
-                  {loading ? (
+                  <p className="text-sm font-medium text-gray-600">
+                    {dueInfo.type === 'trial' ? 'Trial Expira em' : 'Próximo Vencimento'}
+                  </p>
+                  {dueInfo.type === 'loading' ? (
                     <div className="animate-pulse">
                       <div className="h-6 bg-gray-200 rounded w-20 mt-1"></div>
                     </div>
-                  ) : paymentSummary?.nextDueDate ? (
+                  ) : dueInfo.type === 'none' ? (
+                    <p className="text-lg font-bold text-gray-400">--</p>
+                  ) : (
                     <>
                       <p className={`text-lg font-bold ${
-                        getDaysUntilDue(paymentSummary.nextDueDate) <= 7 ? 'text-red-600' :
-                        getDaysUntilDue(paymentSummary.nextDueDate) <= 15 ? 'text-yellow-600' : 'text-gray-900'
+                        (dueInfo.days??0) <= 7 ? 'text-red-600' :
+                        (dueInfo.days??0) <= 15 ? 'text-yellow-600' : 'text-gray-900'
                       }`}>
-                        {getDaysUntilDue(paymentSummary.nextDueDate)} dias
+                        {dueInfo.days} dias
                       </p>
                       <p className="text-xs text-gray-600 mt-1">
-                        {formatDate(paymentSummary.nextDueDate)}
+                        {formatDate(dueInfo.date?? new Date())}
                       </p>
+                      {dueInfo.type === 'trial' && (dueInfo.days??0) <= 7 && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          Escolha um plano para continuar
+                        </p>
+                      )}
                     </>
-                  ) : (
-                    <p className="text-lg font-bold text-gray-400">--</p>
                   )}
                 </div>
                 <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -349,9 +406,12 @@ function DashboardClient({ user }: Props) {
 
           {/* Seções do Dashboard */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Parcelas Pendentes */}
+            {/* Parcelas Pendentes / Informações do Trial */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Parcelas Pendentes</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                {isTrialUser() ? 'Informações do Trial' : 'Parcelas Pendentes'}
+              </h2>
+              
               {loading ? (
                 <div className="space-y-3">
                   <div className="animate-pulse">
@@ -359,9 +419,38 @@ function DashboardClient({ user }: Props) {
                     <div className="h-3 bg-gray-200 rounded w-1/2 mt-2"></div>
                   </div>
                 </div>
-              ) : pendingInstallments.length > 0 ? (
+              ) : isTrialUser() ? (
+                // Conteúdo especial para trial
                 <div className="space-y-3">
-                  {pendingInstallments.slice(0, 3).map((installment) => {
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center">
+                      <CheckCircle className="h-5 w-5 text-blue-600 mr-2" />
+                      <div>
+                        <p className="font-medium text-blue-900">
+                          Período Trial Ativo
+                        </p>
+                        <p className="text-sm text-blue-700">
+                          Aproveite todos os recursos gratuitamente
+                        </p>
+                        {paymentSummary?.currentPlan?.period?.expiresAt && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            Expira em: {formatDate(paymentSummary.currentPlan.period.expiresAt)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2">
+                    <button className="w-full text-center py-3 px-4 bg-yellow-400 text-black rounded-lg hover:bg-yellow-300 transition font-medium">
+                      Escolher outro plano
+                    </button>
+                  </div>
+                </div>
+              ) : filteredInstallments.length > 0 ? (
+                // Conteúdo normal para planos pagos
+                <div className="space-y-3">
+                  {filteredInstallments.slice(0, 3).map((installment) => {
                     const daysUntilDue = getDaysUntilDue(installment.dueDate)
                     return (
                       <div key={installment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -392,9 +481,9 @@ function DashboardClient({ user }: Props) {
                       </div>
                     )
                   })}
-                  {pendingInstallments.length > 3 && (
+                  {filteredInstallments.length > 3 && (
                     <button className="w-full text-center py-2 text-blue-600 hover:text-blue-700 text-sm font-medium">
-                      Ver todas as parcelas ({pendingInstallments.length})
+                      Ver todas as parcelas ({filteredInstallments.length})
                     </button>
                   )}
                 </div>

@@ -180,7 +180,7 @@ export default function ProfilePage() {
         await updateClientUser(
           user.sub,
           clientData.name,
-          clientData.email,
+          formData.email,
           clientData.cpfCnpj,
           clientData.phone
         )
@@ -188,7 +188,7 @@ export default function ProfilePage() {
         const backofficeData = data as BackofficeInfoData
         await updateUser(user.sub, {
           name: backofficeData.name,
-          email: backofficeData.email,
+          email: formData.email,
         })
       }
 
@@ -452,7 +452,7 @@ export default function ProfilePage() {
                             placeholder="Digite seu e-mail"
                             value={formData.email}
                             onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                            disabled={!editingInfo || loadingInfo}
+                            disabled
                           />
                           {activeForm.formState.errors.email && (
                             <p className="text-red-500 text-xs mt-1">{activeForm.formState.errors.email.message}</p>

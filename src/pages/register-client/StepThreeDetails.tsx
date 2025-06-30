@@ -9,6 +9,9 @@ import { acceptTerms, getCurrentTerms } from '@/services/termsService'
 import { toast } from 'react-toastify'
 import InfoTooltip from '@/components/shared/InfoToolTip'
 import PasswordField from '@/components/shared/PasswordField'
+import { updateClientUser, updateClient } from '@/services/clientService'
+import { loginClient } from '@/services/authService'
+import { useAuthContext } from '@/contexts/AuthContext'
 
 const schema = z.object({
   cpfCnpj: z.string().min(11, 'CPF ou CNPJ obrigatório'),
@@ -33,6 +36,7 @@ type FormData = z.infer<typeof schema>
 
 export default function StepThreeDetails({ onNext }: { onNext: () => void }) {
   const [currentTerms, setCurrentTerms] = useState<{ id: string; fileUrl?: string } | null>(null)
+  const { login } = useAuthContext()
   const { formData, setFormData } = useRegisterClient()
   if (!formData?.clientUserId) return null;
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -53,18 +57,48 @@ export default function StepThreeDetails({ onNext }: { onNext: () => void }) {
     })
   }, [])
 
-  async function onSubmit(data: FormData) {
-    try {
-      await acceptTerms({
-        clientUserId: formData.clientUserId,
-        termsId: currentTerms?.id||'',
-      })
-      setFormData(data)
-      onNext()
-    } catch (err: any) {
-      toast.error(err?.message || 'Erro ao salvar os dados.')
-    }
+async function onSubmit(data: FormData) {
+  try {
+    // Faz login
+    const token = await loginClient({
+      login: formData.email,
+      password: formData.password,
+      context: 'CLIENT',
+    })
+
+    login(token, 'CLIENT')
+    
+    await acceptTerms({
+      clientUserId: formData.clientUserId,
+      termsId: currentTerms?.id || '',
+    })
+
+    await updateClientUser(
+      formData.clientUserId,
+      formData.companyName,
+      formData.email,
+      data.cpfCnpj,     
+      data.phone,       
+      data.password      
+    )
+
+    await updateClient(
+      formData.clientId,
+      formData.companyName,
+      formData.email,
+      data.cpfCnpj       
+    )
+
+    setFormData(data)
+    
+    toast.success('Dados salvos com sucesso!')
+    onNext()
+  } 
+  catch (error) {
+    console.error('Erro ao salvar dados:', error)
+    toast.error('Erro ao salvar dados. Tente novamente.')
   }
+}
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

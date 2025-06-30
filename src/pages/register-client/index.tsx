@@ -32,20 +32,12 @@ function WizardContent() {
     setStep(prev => prev - 1)
   }
 
-  // Quando seleciona um plano no Step 4
-  function handlePlanSelected(plan: Plan) {
-    setSelectedPlan(plan)
-    
-    // Se é plano trial, pode implementar lógica específica aqui
-    if (plan.isTrial) {
-      // Por enquanto, trials também vão para step 5
-      // Você pode ajustar isso depois se quiser pular o pagamento para trials
-      setStep(5)
-    } else {
-      // Planos pagos vão para step de pagamento
-      setStep(5)
-    }
+function handlePlanSelected(plan: Plan) {
+  setSelectedPlan(plan)
+  if (!plan.isTrial) {
+    setStep(5)
   }
+}
 
   // Volta do step 5 para step 4
   function handleBackToPlans() {

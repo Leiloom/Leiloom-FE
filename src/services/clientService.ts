@@ -1,24 +1,27 @@
 import { Id } from 'react-toastify'
 import { api } from './api'
+import { handleAuthError } from './authService' // ✅ IMPORTAR
 import Client from '@/services/Interfaces' 
 import ClientReduced from '@/services/Interfaces' 
 
 /**
  * Cadastra um novo cliente
  * @param name Nome da empresa
- * @param cpfCnpj Endereço da empresa
+ * @param email Email da empresa
+ * @param cpfCnpj CNPJ da empresa
  * @returns Dados do cliente cadastrado
  */
-export async function registerClient(name: string, cpfCnpj: string) {
+export async function registerClient(name: string, email: string, cpfCnpj: string) {
   try {
     const response = await api.post('/clients', {
       name,
+      email,
       cpfCnpj,
     })
     return response.data
-  } catch (error) {
-    console.error('Error registering client:', error)
-    throw error
+  } catch (error: any) {
+    // ✅ USAR handleAuthError em vez de tratamento manual
+    return handleAuthError(error, 'Erro ao registrar cliente.')
   }
 }
 
@@ -26,19 +29,21 @@ export async function registerClient(name: string, cpfCnpj: string) {
  * Atualiza um cliente
  * @param id da empresa
  * @param name Nome da empresa
- * @param cpfCnpj Endereço da empresa
+ * @param email Email da empresa
+ * @param cpfCnpj CNPJ da empresa
  * @returns Dados do cliente cadastrado
  */
-export async function updateClient(id:Id, name: string, cpfCnpj: string) {
+export async function updateClient(id: Id, name: string, email: string, cpfCnpj: string) {
   try {
     const response = await api.patch(`/clients/${id}`, {
       name,
+      email,
       cpfCnpj,
     })
     return response.data
-  } catch (error) {
-    console.error('Error registering client:', error)
-    throw error
+  } catch (error: any) {
+    // ✅ USAR handleAuthError
+    return handleAuthError(error, 'Erro ao atualizar cliente.')
   }
 }
 
@@ -72,11 +77,8 @@ export async function registerClientUser(
     })
     return response.data
   } catch (error: any) {
-    if (error.response?.status === 409) {
-      return Promise.reject({ message: 'Este e-mail já está em uso.' })
-    }
-
-    return Promise.reject({ message: 'Erro ao registrar usuário.' })
+    // ✅ USAR handleAuthError
+    return handleAuthError(error, 'Erro ao registrar usuário.')
   }
 }
 
@@ -109,11 +111,8 @@ export async function updateClientUser(
     
     return response.data
   } catch (error: any) {
-    if (error.response?.status === 409) {
-      return Promise.reject({ message: 'Este e-mail já está em uso.' })
-    }
-    console.error('Error updating client user:', error)
-    return Promise.reject({ message: 'Erro ao registrar usuário.' })
+    // ✅ USAR handleAuthError
+    return handleAuthError(error, 'Erro ao atualizar usuário.')
   }
 }
 
@@ -125,8 +124,8 @@ export async function getAllClients(): Promise<Client[]> {
     const response = await api.get('/clients')
     return response.data
   } catch (error: any) {
-    console.error('Erro ao buscar clientes:', error)
-    return Promise.reject({ message: 'Erro ao listar os clientes.' })
+    // ✅ USAR handleAuthError
+    return handleAuthError(error, 'Erro ao listar os clientes.')
   }
 }
 
@@ -138,8 +137,8 @@ export async function getClientById(id: string): Promise<Client> {
     const response = await api.get(`/clients/${id}`)
     return response.data
   } catch (error: any) {
-    console.error('Erro ao buscar cliente:', error)
-    return Promise.reject({ message: 'Erro ao buscar cliente por ID.' })
+    // ✅ USAR handleAuthError
+    return handleAuthError(error, 'Erro ao buscar cliente por ID.')
   }
 }
 
@@ -150,6 +149,7 @@ export async function updateClientAll(id: string, data: Partial<Client>) {
   try {
     const dataToUpdate: Partial<ClientReduced> = {
       name: data.name,
+      email: data.email,
       cpfCnpj: data.cpfCnpj,
       cep: data.cep,
       street: data.street,
@@ -167,8 +167,8 @@ export async function updateClientAll(id: string, data: Partial<Client>) {
     const response = await api.patch(`/clients/${id}`, dataToUpdate)
     return response.data
   } catch (error: any) {
-    console.error('Erro ao atualizar cliente:', error)
-    return Promise.reject({ message: 'Erro ao atualizar cliente.' })
+    // ✅ USAR handleAuthError
+    return handleAuthError(error, 'Erro ao atualizar cliente.')
   }
 }
 
@@ -180,8 +180,8 @@ export async function excludeClient(id: string) {
     const response = await api.patch(`/clients/${id}`, { status: 'EXCLUDED' })
     return response.data
   } catch (error: any) {
-    console.error('Erro ao excluir cliente:', error)
-    return Promise.reject({ message: 'Erro ao excluir cliente.' })
+    // ✅ USAR handleAuthError
+    return handleAuthError(error, 'Erro ao excluir cliente.')
   }
 }
 
@@ -197,7 +197,7 @@ export async function createClient(client: Omit<Client, 'id' | 'status' | 'isCon
     })
     return response.data
   } catch (error: any) {
-    console.error('Erro ao criar cliente:', error)
-    return Promise.reject({ message: 'Erro ao criar cliente.' })
+    // ✅ USAR handleAuthError
+    return handleAuthError(error, 'Erro ao criar cliente.')
   }
 }

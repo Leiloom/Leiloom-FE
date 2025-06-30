@@ -27,6 +27,26 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('CREDIT_CARD')
     const { login } = useAuthContext()
 
+    // ✅ CORREÇÃO: Verificação de segurança para evitar erro de SSR
+    if (!selectedPlan) {
+        return (
+            <div className="space-y-6">
+                <div className="text-center">
+                    <p className="text-gray-600">Carregando informações do plano...</p>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto mt-4"></div>
+                </div>
+                <div className="flex justify-between pt-4">
+                    <button
+                        onClick={onBack}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
+                    >
+                        Voltar
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
     function formatPrice(price: number): string {
         if (price === 0) return 'Grátis'
         return new Intl.NumberFormat('pt-BR', {
@@ -92,30 +112,8 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
 
     async function handleCreateSubscription() {
         try {
-            await updateClientUser(
-                formData.clientUserId,
-                formData.companyName,
-                formData.email,
-                formData.cpfCnpj,
-                formData.phone,
-                formData.password
-            )
-            await updateClient(formData.clientId, formData.companyName, formData.cpfCnpj)
-
-            // 2. Aceita os termos
-            const currentTerms = await getCurrentTerms()
-            if (!currentTerms) {
-                toast.error('Nenhum termo de uso disponível.')
-                return
-            }
-
-            await acceptTerms({
-                clientUserId: formData.clientUserId!,
-                termsId: currentTerms.id,
-            })
-
-
-
+            // ✅ OTIMIZADO: Removidas operações redundantes feitas no Step 3
+            // Faz login
             const token = await loginClient({
                 login: formData.email,
                 password: formData.password,
@@ -124,14 +122,12 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
 
             login(token, 'CLIENT')
 
+            // Cria assinatura paga
             const subscriptionData = await createSubscriptionOnly({
                 planId: selectedPlan.id,
                 installments: selectedInstallments,
                 paymentMethod: selectedPaymentMethod
             })
-
-
-            toast.success('Conta criada com sucesso!')
 
             router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'created'}`)
         } catch (err: any) {

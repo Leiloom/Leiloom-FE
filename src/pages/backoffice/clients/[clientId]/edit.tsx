@@ -17,19 +17,19 @@ import {
   createClientUserAdm,
   updateClientUser,
 } from '@/services/clientUserService'
-import ClientUser from '@/services/Interfaces' 
-import Client from '@/services/Interfaces' 
+import ClientUser from '@/services/Interfaces'
+import Client from '@/services/Interfaces'
 import { getCountries } from '@/services/countryService'
 import { getCitiesByCountryCode, City } from '@/services/cityService'
-import { 
-  getAddressByCep, 
-  getStatesByCountryCode, 
-  getCitiesByStateCode, 
-  State 
+import {
+  getAddressByCep,
+  getStatesByCountryCode,
+  getCitiesByStateCode,
+  State
 } from '@/services/addressService'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
- 
+
 interface Country {
   code: string
   name: string
@@ -42,14 +42,14 @@ function ClientEditPage() {
   const [client, setClient] = useState<Client | null>(null)
   const [users, setUsers] = useState<ClientUser[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  
+
   const statusMap: Record<Client['status'], { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
     PENDING: { label: 'Pendente', variant: 'warning' },
     CONFIRMED: { label: 'Confirmado', variant: 'info' },
     APPROVED: { label: 'Aprovado', variant: 'success' },
     EXCLUDED: { label: 'Excluído', variant: 'error' },
   }
-  
+
   const roleMap: Record<Client['role'], { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
     ClientOwner: { label: 'Owner', variant: 'warning' },
     ClientAdmin: { label: 'Admin', variant: 'info' },
@@ -64,11 +64,11 @@ function ClientEditPage() {
   const [isLoadingStates, setIsLoadingStates] = useState(false)
   const [isLoadingCities, setIsLoadingCities] = useState(false)
   const [isLoadingCep, setIsLoadingCep] = useState(false)
-  
+
   const [countries, setCountries] = useState<Country[]>([])
   const [states, setStates] = useState<State[]>([])
   const [cities, setCities] = useState<City[]>([])
-  
+
   const { currentPage, totalPages, paginatedData, goToPage, resetToFirstPage } =
     usePagedData(users, 10)
 
@@ -77,15 +77,15 @@ function ClientEditPage() {
     { key: 'email', header: 'Email', className: 'hidden sm:table-cell' },
     { key: 'phone', header: 'Telefone', className: 'hidden md:table-cell' },
     { key: 'cpfCnpj', header: 'CPF/CNPJ', className: 'hidden lg:table-cell' },
-    { 
-      key: 'role', 
+    {
+      key: 'role',
       header: 'Função',
       className: 'hidden sm:table-cell',
       render: (role: Client['role']) => roleMap[role].label
     },
     {
-      key: 'status', 
-      header: 'Status', 
+      key: 'status',
+      header: 'Status',
       render: (status: Client['status']) => (
         <StatusBadge variant={statusMap[status].variant}>
           {statusMap[status].label}
@@ -93,18 +93,18 @@ function ClientEditPage() {
       )
     },
     {
-      key: 'actions', 
-      header: 'Ações', 
+      key: 'actions',
+      header: 'Ações',
       render: (_: any, u: ClientUser) => (
         <div className="flex justify-end">
-          <ActionButton 
-            variant="edit" 
-            onClick={() => { 
-              setUserAction('edit'); 
-              setEditingUser(u); 
-              setIsUserModalOpen(true) 
-            }} 
-            disabled={isLoading} 
+          <ActionButton
+            variant="edit"
+            onClick={() => {
+              setUserAction('edit');
+              setEditingUser(u);
+              setIsUserModalOpen(true)
+            }}
+            disabled={isLoading}
           />
         </div>
       )
@@ -153,7 +153,7 @@ function ClientEditPage() {
 
   async function loadStates() {
     if (!client?.country) return
-    
+
     setIsLoadingStates(true)
     try {
       const countryObj = countries.find(c => c.name === client.country)
@@ -171,7 +171,7 @@ function ClientEditPage() {
 
   async function loadCities() {
     if (!client?.state) return
-    
+
     setIsLoadingCities(true)
     try {
       const stateObj = states.find(s => s.name === client.state)
@@ -195,7 +195,7 @@ function ClientEditPage() {
 
   async function handleCepChange(cep: string) {
     const cleanCep = cep.replace(/\D/g, '')
-    
+
     if (cleanCep.length === 8) {
       setIsLoadingCep(true)
       try {
@@ -273,7 +273,7 @@ function ClientEditPage() {
     <MainLayout>
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-6 max-w-7xl">
-          
+
           {/* Header da página */}
           <div className="mb-6">
             <PageHeader
@@ -290,7 +290,7 @@ function ClientEditPage() {
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Informações do Cliente</h2>
             </div>
-            
+
             <div className="p-6 space-y-6">
               {/* Dados principais */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -304,6 +304,18 @@ function ClientEditPage() {
                     value={client.name}
                     onChange={e => setClient({ ...client, name: e.target.value })}
                     disabled={isLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder='Digite o email da empresa'
+                    value={client.email || ''}
+                    onChange={e => setClient({ ...client, email: e.target.value })}
+                    disabled
                   />
                 </div>
                 <div>
@@ -324,7 +336,7 @@ function ClientEditPage() {
               <div>
                 <h3 className="text-md font-medium text-gray-900 mb-3">Endereço</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  
+
                   {/* País */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
@@ -483,11 +495,11 @@ function ClientEditPage() {
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <h2 className="text-lg font-semibold text-gray-900">Usuários do Cliente</h2>
-                <Button 
-                    variant="add" onClick={() => { 
-                    setUserAction('create'); 
-                    setEditingUser(null); 
-                    setIsUserModalOpen(true) 
+                <Button
+                  variant="add" onClick={() => {
+                    setUserAction('create');
+                    setEditingUser(null);
+                    setIsUserModalOpen(true)
                   }}
                   disabled={isLoading}>
                   Novo Usuário
@@ -505,10 +517,10 @@ function ClientEditPage() {
                 onPageChange={goToPage}
                 isLoading={isLoading}
                 emptyStateTitle="Nenhum usuário cadastrado."
-                onCreateFirst={() => { 
-                  setUserAction('create'); 
-                  setEditingUser(null); 
-                  setIsUserModalOpen(true) 
+                onCreateFirst={() => {
+                  setUserAction('create');
+                  setEditingUser(null);
+                  setIsUserModalOpen(true)
                 }}
                 createFirstText="Criar o primeiro usuário"
               />
@@ -524,7 +536,7 @@ function ClientEditPage() {
               >
                 <div className="fixed inset-0 bg-black/25 backdrop-blur-sm" />
               </Transition.Child>
-              
+
               <div className="fixed inset-0 overflow-y-auto">
                 <div className="flex min-h-full items-center justify-center p-4">
                   <Transition.Child as={Fragment}
@@ -537,7 +549,7 @@ function ClientEditPage() {
                           {userAction === 'create' ? 'Adicionar usuário' : 'Editar usuário'}
                         </Dialog.Title>
                       </div>
-                      
+
                       <form onSubmit={e => {
                         e.preventDefault()
                         const f = new FormData(e.currentTarget)
@@ -546,65 +558,65 @@ function ClientEditPage() {
                       }} className="p-6 space-y-4">
                         <div>
                           <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                          <Input 
-                            id="name" 
-                            name="name" 
-                            type="text" 
+                          <Input
+                            id="name"
+                            name="name"
+                            type="text"
                             placeholder="Digite o nome do usuário"
-                            defaultValue={editingUser?.name} 
-                            required 
+                            defaultValue={editingUser?.name}
+                            required
                             disabled={isLoading}
                           />
                         </div>
-                        
+
                         <div>
                           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                          <Input 
-                            id="email" 
-                            name="email" 
-                            type="email" 
+                          <Input
+                            id="email"
+                            name="email"
+                            type="email"
                             placeholder="Digite o email do usuário"
-                            defaultValue={editingUser?.email} 
-                            required 
+                            defaultValue={editingUser?.email}
+                            required
                             disabled={isLoading}
                           />
                         </div>
-                        
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                            <Input 
-                              id="phone" 
-                              name="phone" 
-                              type="text" 
+                            <Input
+                              id="phone"
+                              name="phone"
+                              type="text"
                               placeholder="Digite o telefone do usuário"
-                              defaultValue={editingUser?.phone} 
-                              required 
+                              defaultValue={editingUser?.phone}
+                              required
                               disabled={isLoading}
                             />
                           </div>
-                          
+
                           <div>
                             <label htmlFor="cpfCnpj" className="block text-sm font-medium text-gray-700 mb-1">CPF/CNPJ</label>
-                            <Input 
-                              id="cpfCnpj" 
-                              name="cpfCnpj" 
-                              type="text" 
+                            <Input
+                              id="cpfCnpj"
+                              name="cpfCnpj"
+                              type="text"
                               placeholder="Digite o CPF ou CNPJ do usuário"
-                              defaultValue={editingUser?.cpfCnpj} 
-                              required 
+                              defaultValue={editingUser?.cpfCnpj}
+                              required
                               disabled={isLoading}
                             />
                           </div>
                         </div>
-                        
+
                         <div>
                           <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">Função</label>
-                          <select 
-                            id="role" 
-                            name="role" 
-                            defaultValue={editingUser?.role} 
-                            className="w-full border text-gray-700 border-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors" 
+                          <select
+                            id="role"
+                            name="role"
+                            defaultValue={editingUser?.role}
+                            className="w-full border text-gray-700 border-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
                             disabled={isLoading}
                           >
                             <option value="" disabled>Selecione...</option>
@@ -614,15 +626,15 @@ function ClientEditPage() {
                             <option value="ClientOperator">Operador</option>
                           </select>
                         </div>
-                        
+
                         {userAction === 'edit' && (
                           <div>
                             <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Situação</label>
-                            <select 
-                              id="status" 
-                              name="status" 
-                              defaultValue={editingUser?.status} 
-                              className="w-full text-gray-700 border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors" 
+                            <select
+                              id="status"
+                              name="status"
+                              defaultValue={editingUser?.status}
+                              className="w-full text-gray-700 border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
                               disabled={isLoading}
                             >
                               <option value="" disabled>Selecione...</option>
@@ -633,7 +645,7 @@ function ClientEditPage() {
                             </select>
                           </div>
                         )}
-                        
+
                         <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
                           <Button
                             type="button"
