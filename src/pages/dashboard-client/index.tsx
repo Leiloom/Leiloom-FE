@@ -41,7 +41,7 @@ function DashboardClient({ user }: Props) {
   async function loadAllData() {
     try {
       setLoading(true)
-      
+
       // Carrega dados em paralelo
       const [dashboardResult, paymentResult, installmentsResult] = await Promise.allSettled([
         getClientDashboardData(),
@@ -105,12 +105,12 @@ function DashboardClient({ user }: Props) {
   // Lógica do próximo vencimento (trial vs pagamento)
   const getNextDueInfo = () => {
     if (loading) return { type: 'loading' }
-    
+
     // Se é trial, mostra expiração do trial
     if (isTrialUser() && paymentSummary?.currentPlan?.period?.expiresAt) {
       const trialExpiresAt = paymentSummary.currentPlan.period.expiresAt
       const daysUntilExpiration = getDaysUntilDue(trialExpiresAt)
-      
+
       return {
         type: 'trial',
         days: daysUntilExpiration,
@@ -118,11 +118,11 @@ function DashboardClient({ user }: Props) {
         message: 'Trial expira em'
       }
     }
-    
+
     // Se não é trial e tem próximo vencimento
     if (paymentSummary?.nextDueDate) {
       const daysUntilDue = getDaysUntilDue(paymentSummary.nextDueDate)
-      
+
       return {
         type: 'payment',
         days: daysUntilDue,
@@ -130,7 +130,7 @@ function DashboardClient({ user }: Props) {
         message: 'Próxima parcela em'
       }
     }
-    
+
     // Não tem vencimentos
     return { type: 'none' }
   }
@@ -145,19 +145,19 @@ function DashboardClient({ user }: Props) {
 
   const getAccountStatus = () => {
     if (!paymentSummary?.currentPlan) return { text: 'Inativo', color: 'text-red-600' }
-    
+
     if (paymentSummary.currentPlan.period?.isTrial) {
       return { text: 'Trial Ativo', color: 'text-blue-600' }
     }
-    
+
     if (paymentSummary.overdueAmount > 0) {
       return { text: 'Em Atraso', color: 'text-red-600' }
     }
-    
+
     if (paymentSummary.pendingAmount > 0) {
       return { text: 'Pendente', color: 'text-yellow-600' }
     }
-    
+
     return { text: 'Ativo', color: 'text-green-600' }
   }
 
@@ -166,7 +166,7 @@ function DashboardClient({ user }: Props) {
     if (isTrialUser() && paymentSummary?.currentPlan?.period?.expiresAt) {
       const expiresAt = paymentSummary.currentPlan.period.expiresAt
       const daysLeft = getDaysUntilDue(expiresAt)
-      
+
       if (daysLeft <= 7) {
         return {
           type: 'info' as const,
@@ -175,10 +175,10 @@ function DashboardClient({ user }: Props) {
           action: 'Escolher Plano'
         }
       }
-      
+
       return null // Trial com mais de 7 dias, não mostra alerta
     }
-    
+
     // Resto da lógica original para planos pagos
     if ((paymentSummary?.overdueAmount ?? 0) > 0) {
       return {
@@ -188,11 +188,11 @@ function DashboardClient({ user }: Props) {
         action: 'Pagar Agora'
       }
     }
-    
+
     if (pendingInstallments.length > 0) {
       const nextDue = pendingInstallments[0]
       const daysUntilDue = getDaysUntilDue(nextDue.dueDate)
-      
+
       if (daysUntilDue <= 7) {
         return {
           type: 'warning' as const,
@@ -202,7 +202,7 @@ function DashboardClient({ user }: Props) {
         }
       }
     }
-    
+
     return null
   }
 
@@ -221,7 +221,7 @@ function DashboardClient({ user }: Props) {
             <p className="text-gray-600 mt-2">
               Gerencie sua conta e acompanhe suas atividades.
             </p>
-            
+
             {showWelcomeMessage && (
               <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center">
@@ -236,38 +236,34 @@ function DashboardClient({ user }: Props) {
 
           {/* Alerta de Pagamento */}
           {alert && (
-            <div className={`mb-6 rounded-lg p-4 ${
-              alert.type === 'error' ? 'bg-red-50 border border-red-200' :
-              alert.type === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
-              'bg-blue-50 border border-blue-200'
-            }`}>
+            <div className={`mb-6 rounded-lg p-4 ${alert.type === 'error' ? 'bg-red-50 border border-red-200' :
+                alert.type === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
+                  'bg-blue-50 border border-blue-200'
+              }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   {alert.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />}
                   {alert.type === 'warning' && <Clock className="h-5 w-5 text-yellow-600 mr-2" />}
                   {alert.type === 'info' && <CheckCircle className="h-5 w-5 text-blue-600 mr-2" />}
                   <div>
-                    <h3 className={`font-medium ${
-                      alert.type === 'error' ? 'text-red-800' :
-                      alert.type === 'warning' ? 'text-yellow-800' :
-                      'text-blue-800'
-                    }`}>
+                    <h3 className={`font-medium ${alert.type === 'error' ? 'text-red-800' :
+                        alert.type === 'warning' ? 'text-yellow-800' :
+                          'text-blue-800'
+                      }`}>
                       {alert.title}
                     </h3>
-                    <p className={`text-sm ${
-                      alert.type === 'error' ? 'text-red-700' :
-                      alert.type === 'warning' ? 'text-yellow-700' :
-                      'text-blue-700'
-                    }`}>
+                    <p className={`text-sm ${alert.type === 'error' ? 'text-red-700' :
+                        alert.type === 'warning' ? 'text-yellow-700' :
+                          'text-blue-700'
+                      }`}>
                       {alert.message}
                     </p>
                   </div>
                 </div>
-                <button className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  alert.type === 'error' ? 'bg-red-600 text-white hover:bg-red-700' :
-                  alert.type === 'warning' ? 'bg-yellow-600 text-white hover:bg-yellow-700' :
-                  'bg-blue-600 text-white hover:bg-blue-700'
-                }`}>
+                <button className={`px-4 py-2 rounded-lg text-sm font-medium transition ${alert.type === 'error' ? 'bg-red-600 text-white hover:bg-red-700' :
+                    alert.type === 'warning' ? 'bg-yellow-600 text-white hover:bg-yellow-700' :
+                      'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}>
                   {alert.action}
                 </button>
               </div>
@@ -323,14 +319,12 @@ function DashboardClient({ user }: Props) {
                     </p>
                   )}
                 </div>
-                <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${
-                  loading ? 'bg-gray-100' : getAccountStatus().text === 'Ativo' || getAccountStatus().text === 'Trial Ativo' ? 'bg-green-100' : 
-                  getAccountStatus().text === 'Pendente' ? 'bg-yellow-100' : 'bg-red-100'
-                }`}>
-                  <CheckCircle className={`h-6 w-6 ${
-                    loading ? 'text-gray-400' : getAccountStatus().text === 'Ativo' || getAccountStatus().text === 'Trial Ativo' ? 'text-green-600' : 
-                    getAccountStatus().text === 'Pendente' ? 'text-yellow-600' : 'text-red-600'
-                  }`} />
+                <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${loading ? 'bg-gray-100' : getAccountStatus().text === 'Ativo' || getAccountStatus().text === 'Trial Ativo' ? 'bg-green-100' :
+                    getAccountStatus().text === 'Pendente' ? 'bg-yellow-100' : 'bg-red-100'
+                  }`}>
+                  <CheckCircle className={`h-6 w-6 ${loading ? 'text-gray-400' : getAccountStatus().text === 'Ativo' || getAccountStatus().text === 'Trial Ativo' ? 'text-green-600' :
+                      getAccountStatus().text === 'Pendente' ? 'text-yellow-600' : 'text-red-600'
+                    }`} />
                 </div>
               </div>
             </div>
@@ -346,9 +340,8 @@ function DashboardClient({ user }: Props) {
                     </div>
                   ) : (
                     <>
-                      <p className={`text-lg font-bold ${
-                        (paymentSummary?.pendingAmount ?? 0) > 0 ? 'text-yellow-600' : 'text-gray-900'
-                      }`}>
+                      <p className={`text-lg font-bold ${(paymentSummary?.pendingAmount ?? 0) > 0 ? 'text-yellow-600' : 'text-gray-900'
+                        }`}>
                         {formatPrice(paymentSummary?.pendingAmount || 0)}
                       </p>
                       {(paymentSummary?.pendingAmount ?? 0) > 0 && (
@@ -380,16 +373,15 @@ function DashboardClient({ user }: Props) {
                     <p className="text-lg font-bold text-gray-400">--</p>
                   ) : (
                     <>
-                      <p className={`text-lg font-bold ${
-                        (dueInfo.days??0) <= 7 ? 'text-red-600' :
-                        (dueInfo.days??0) <= 15 ? 'text-yellow-600' : 'text-gray-900'
-                      }`}>
+                      <p className={`text-lg font-bold ${(dueInfo.days ?? 0) <= 7 ? 'text-red-600' :
+                          (dueInfo.days ?? 0) <= 15 ? 'text-yellow-600' : 'text-gray-900'
+                        }`}>
                         {dueInfo.days} dias
                       </p>
                       <p className="text-xs text-gray-600 mt-1">
-                        {formatDate(dueInfo.date?? new Date())}
+                        {formatDate(dueInfo.date ?? new Date())}
                       </p>
-                      {dueInfo.type === 'trial' && (dueInfo.days??0) <= 7 && (
+                      {dueInfo.type === 'trial' && (dueInfo.days ?? 0) <= 7 && (
                         <p className="text-xs text-blue-600 mt-1">
                           Escolha um plano para continuar
                         </p>
@@ -411,7 +403,7 @@ function DashboardClient({ user }: Props) {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
                 {isTrialUser() ? 'Informações do Trial' : 'Parcelas Pendentes'}
               </h2>
-              
+
               {loading ? (
                 <div className="space-y-3">
                   <div className="animate-pulse">
@@ -440,7 +432,7 @@ function DashboardClient({ user }: Props) {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="pt-2">
                     <button className="w-full text-center py-3 px-4 bg-yellow-400 text-black rounded-lg hover:bg-yellow-300 transition font-medium">
                       Escolher outro plano
@@ -469,22 +461,24 @@ function DashboardClient({ user }: Props) {
                           <p className="font-bold text-gray-900">
                             {formatPrice(installment.amount)}
                           </p>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            daysUntilDue < 0 ? 'bg-red-100 text-red-800' :
-                            daysUntilDue <= 7 ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {daysUntilDue < 0 ? 'Vencido' : 
-                             daysUntilDue <= 7 ? 'Urgente' : 'Em dia'}
+                          <span className={`text-xs px-2 py-1 rounded-full ${daysUntilDue < 0 ? 'bg-red-100 text-red-800' :
+                              daysUntilDue <= 7 ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                            }`}>
+                            {daysUntilDue < 0 ? 'Vencido' :
+                              daysUntilDue <= 7 ? 'Urgente' : 'Em dia'}
                           </span>
                         </div>
                       </div>
                     )
                   })}
                   {filteredInstallments.length > 3 && (
-                    <button className="w-full text-center py-2 text-blue-600 hover:text-blue-700 text-sm font-medium">
+                    <a
+                      href="/installments-client"
+                      className="w-full text-center py-2 text-blue-600 hover:text-blue-700 text-sm font-medium block"
+                    >
                       Ver todas as parcelas ({filteredInstallments.length})
-                    </button>
+                    </a>
                   )}
                 </div>
               ) : (
@@ -507,7 +501,7 @@ function DashboardClient({ user }: Props) {
                   </div>
                   <p className="text-sm text-gray-600 mt-1">Alterar ou renovar seu plano</p>
                 </button>
-                
+
                 <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Histórico de Pagamentos</span>
@@ -517,7 +511,7 @@ function DashboardClient({ user }: Props) {
                   </div>
                   <p className="text-sm text-gray-600 mt-1">Ver todos os pagamentos realizados</p>
                 </button>
-                
+
                 <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Configurações</span>
@@ -527,7 +521,7 @@ function DashboardClient({ user }: Props) {
                   </div>
                   <p className="text-sm text-gray-600 mt-1">Editar informações da conta</p>
                 </button>
-                
+
                 <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Suporte</span>

@@ -8,9 +8,10 @@ interface PageHeaderProps {
   onButtonClick: () => void
   isLoading?: boolean
   isDetailsPage?: boolean
+  isDisablesPage?: boolean
 }
 
-export function PageHeader({ title, buttonText, onButtonClick, isLoading = false, isDetailsPage = false }: PageHeaderProps) {
+export function PageHeader({ title, buttonText, onButtonClick, isLoading = false, isDetailsPage = false, isDisablesPage = false }: PageHeaderProps) {
   return (
     <div className="flex justify-between items-center mb-8">
       {isDetailsPage && <BackButton />}
@@ -18,7 +19,7 @@ export function PageHeader({ title, buttonText, onButtonClick, isLoading = false
       <Button
       onClick={onButtonClick}
       variant='add'
-      disabled={isLoading}
+      disabled={isLoading || isDisablesPage}
       >
       {buttonText}
       </Button>

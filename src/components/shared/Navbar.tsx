@@ -54,8 +54,11 @@ export default function Navbar() {
           {/* Só mostra menus específicos após carregar e confirmar contexto */}
           {!isLoading && user?.context === 'CLIENT' && (
           <>
-            <Link href="users" className="hover:text-yellow-400 transition">
+            <Link href="/users" className="hover:text-yellow-400 transition">
               Usuários
+            </Link>
+            <Link href="/installments-client" className="hover:text-yellow-400 transition">
+              Minhas Parcelas
             </Link>
           </>
         )}
@@ -143,13 +146,22 @@ export default function Navbar() {
             
             {/* Links específicos do contexto - só mostra após carregar */}
             {!isLoading && user?.context === 'CLIENT' && (
-              <Link
-                href="#"
-                onClick={() => setIsOpen(false)}
-                className="hover:text-yellow-600"
-              >
-                Opção Cliente
-              </Link>
+              <>
+                <Link
+                  href="/users"
+                  onClick={() => setIsOpen(false)}
+                  className="hover:text-yellow-600"
+                >
+                  Usuários
+                </Link>
+                <Link
+                  href="/installments-client"
+                  onClick={() => setIsOpen(false)}
+                  className="hover:text-yellow-600"
+                >
+                  Minhas Parcelas
+                </Link>
+              </>
             )}
             {!isLoading && user?.context === 'BACKOFFICE' && (
               <>

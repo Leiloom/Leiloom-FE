@@ -182,3 +182,23 @@ export async function cancelPayment(paymentId: string, reason?: string) {
         return handleAuthError(error, 'Erro ao cancelar pagamento.')
     }
 }
+
+/**
+ * Busca todas as parcelas do cliente (pendentes, pagas, em atraso, etc.)
+ */
+export async function getAllInstallments(): Promise<PendingInstallment[]> {
+    try {
+        const response = await api.get('/payments/installments/all')
+
+        return response.data.map((installment: any) => ({
+            ...installment,
+            dueDate: new Date(installment.dueDate),
+            paidAt: installment.paidAt ? new Date(installment.paidAt) : null,
+            createdAt: new Date(installment.createdAt),
+            updatedAt: new Date(installment.updatedAt)
+        }))
+    } catch (error: any) {
+        return handleAuthError(error, 'Erro ao buscar todas as parcelas.')
+    }
+}
+

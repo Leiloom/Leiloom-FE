@@ -17,13 +17,22 @@ import {
     updateClientUser,
     getClientUserById
 } from '@/services/clientUserService'
+import { getDetailedPaymentSummary } from '@/services/paymentService'
 import ClientUser from '@/services/Interfaces'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
 import { TokenPayload } from '@/utils/jwtUtils'
+import { Users, AlertTriangle, CheckCircle } from 'lucide-react'
 
 interface Props {
     user: TokenPayload
+}
+
+interface PlanInfo {
+    planName: string
+    numberOfUsers: number
+    currentUserCount: number
+    canAddUsers: boolean
 }
 
 function UserManagementPage({ user }: Props) {
@@ -34,6 +43,7 @@ function UserManagementPage({ user }: Props) {
     const [searchTerm, setSearchTerm] = useState('')
     const [statusFilter, setStatusFilter] = useState<string>('all')
     const [roleFilter, setRoleFilter] = useState<string>('all')
+    const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null)
 
     const statusMap: Record<ClientUser['status'], { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
         PENDING: { label: 'Pendente', variant: 'warning' },
@@ -96,7 +106,7 @@ function UserManagementPage({ user }: Props) {
     ]
 
     useEffect(() => {
-        loadUsers()
+        loadUsersAndPlanInfo()
     }, [])
 
     useEffect(() => {
@@ -131,14 +141,34 @@ function UserManagementPage({ user }: Props) {
         resetToFirstPage()
     }
 
-    async function loadUsers() {
+    async function loadUsersAndPlanInfo() {
         setIsLoading(true)
         try {
-            const usersData = await getClientUsers(user.clientId ?? '')
+            // Carrega usuários e informações do plano em paralelo
+            const [usersData, paymentSummary] = await Promise.all([
+                getClientUsers(user.clientId ?? ''),
+                getDetailedPaymentSummary()
+            ])
+
             setUsers(usersData)
+
+            // Calcula informações do plano
+            if (paymentSummary.currentPlan) {
+                const activeUsers = usersData.filter(u => u.status !== 'EXCLUDED').length
+                const maxUsers = paymentSummary.currentPlan.period?.isTrial 
+                    ? 999 // Trial pode ter usuários ilimitados
+                    : 5 // Default se não tiver numberOfUsers definido no plano
+
+                setPlanInfo({
+                    planName: paymentSummary.currentPlan.planName,
+                    numberOfUsers: maxUsers,
+                    currentUserCount: activeUsers,
+                    canAddUsers: activeUsers < maxUsers
+                })
+            }
         } catch (error) {
-            console.error('Erro ao carregar usuários:', error)
-            toast.error('Erro ao carregar usuários')
+            console.error('Erro ao carregar dados:', error)
+            toast.error('Erro ao carregar usuários e informações do plano')
         } finally {
             setIsLoading(false)
         }
@@ -155,27 +185,13 @@ function UserManagementPage({ user }: Props) {
         }
     }
 
-    async function handleToggleUserStatus(user: ClientUser) {
-        const newStatus = user.status === 'EXCLUDED' ? 'APPROVED' : 'EXCLUDED'
-        const action = newStatus === 'EXCLUDED' ? 'desativar' : 'ativar'
-
-        if (!confirm(`Tem certeza que deseja ${action} este usuário?`)) {
+    async function saveUser(payload: Partial<ClientUser> & { password?: string }) {
+        // Validação para criação de novo usuário
+        if (userAction === 'create' && planInfo && !planInfo.canAddUsers) {
+            toast.error(`Limite de usuários atingido! Seu plano permite no máximo ${planInfo.numberOfUsers} usuários.`)
             return
         }
 
-        setIsLoading(true)
-        try {
-            await updateClientUser(user.id ?? '', { status: newStatus })
-            toast.success(`Usuário ${action === 'desativar' ? 'desativado' : 'ativado'} com sucesso!`)
-            loadUsers()
-        } catch (error) {
-            toast.error(`Erro ao ${action} usuário`)
-        } finally {
-            setIsLoading(false)
-        }
-    }
-
-    async function saveUser(payload: Partial<ClientUser> & { password?: string }) {
         setIsLoading(true)
         try {
             if (userAction === 'edit' && editingUser?.id) {
@@ -187,15 +203,24 @@ function UserManagementPage({ user }: Props) {
                 toast.success('Usuário criado com sucesso!')
             }
             setIsUserModalOpen(false)
-            loadUsers()
-        } catch (error) {
-            toast.error('Erro ao salvar usuário')
+            loadUsersAndPlanInfo() // Recarrega para atualizar contadores
+        } catch (error: any) {
+            if (error?.message?.includes('limite') || error?.message?.includes('limit')) {
+                toast.error('Limite de usuários do plano atingido!')
+            } else {
+                toast.error('Erro ao salvar usuário')
+            }
         } finally {
             setIsLoading(false)
         }
     }
 
     function openCreateModal() {
+        if (planInfo && !planInfo.canAddUsers) {
+            toast.error(`Limite de usuários atingido! Seu plano "${planInfo.planName}" permite no máximo ${planInfo.numberOfUsers} usuários ativos.`)
+            return
+        }
+
         setUserAction('create')
         setEditingUser(null)
         setIsUserModalOpen(true)
@@ -214,8 +239,87 @@ function UserManagementPage({ user }: Props) {
                             onButtonClick={openCreateModal}
                             isLoading={isLoading}
                             isDetailsPage={true}
+                            isDisablesPage={planInfo ? !planInfo.canAddUsers : false}
                         />
                     </div>
+
+                    {/* Card de Informações do Plano */}
+                    {planInfo && (
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                            <div className="px-6 py-4 border-b border-gray-200">
+                                <h2 className="text-lg font-semibold text-gray-900">Informações do Plano</h2>
+                            </div>
+                            <div className="p-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {/* Plano Atual */}
+                                    <div className="flex items-center space-x-3">
+                                        <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                            <Users className="h-5 w-5 text-blue-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-gray-600">Plano Atual</p>
+                                            <p className="font-semibold text-gray-900">{planInfo.planName}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Usuários Utilizados */}
+                                    <div className="flex items-center space-x-3">
+                                        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                                            planInfo.canAddUsers ? 'bg-green-100' : 'bg-red-100'
+                                        }`}>
+                                            {planInfo.canAddUsers ? (
+                                                <CheckCircle className="h-5 w-5 text-green-600" />
+                                            ) : (
+                                                <AlertTriangle className="h-5 w-5 text-red-600" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-gray-600">Usuários Ativos</p>
+                                            <p className={`font-semibold ${
+                                                planInfo.canAddUsers ? 'text-gray-900' : 'text-red-600'
+                                            }`}>
+                                                {planInfo.currentUserCount} de {planInfo.numberOfUsers}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Status */}
+                                    <div className="flex items-center space-x-3">
+                                        <div>
+                                            <p className="text-sm text-gray-600">Status</p>
+                                            {planInfo.canAddUsers ? (
+                                                <div className="flex items-center text-green-600">
+                                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                                    <span className="font-medium text-sm">Pode adicionar usuários</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center text-red-600">
+                                                    <AlertTriangle className="h-4 w-4 mr-1" />
+                                                    <span className="font-medium text-sm">Limite atingido</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Alerta de Limite */}
+                                {!planInfo.canAddUsers && (
+                                    <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                                        <div className="flex items-start">
+                                            <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 mr-3" />
+                                            <div>
+                                                <h4 className="text-sm font-medium text-red-800">Limite de usuários atingido</h4>
+                                                <p className="text-sm text-red-700 mt-1">
+                                                    Seu plano "{planInfo.planName}" permite no máximo {planInfo.numberOfUsers} usuários ativos. 
+                                                    Para adicionar mais usuários, considere fazer upgrade do seu plano ou desativar usuários não utilizados.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Filtros */}
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
@@ -284,6 +388,11 @@ function UserManagementPage({ user }: Props) {
                                     <h2 className="text-lg font-semibold text-gray-900">Usuários</h2>
                                     <p className="text-sm text-gray-600 mt-1">
                                         {filteredUsers.length} de {users.length} usuários
+                                        {planInfo && (
+                                            <span className="ml-2 text-xs text-gray-500">
+                                                • {planInfo.currentUserCount}/{planInfo.numberOfUsers} ativos no plano
+                                            </span>
+                                        )}
                                     </p>
                                 </div>
                             </div>
@@ -299,8 +408,8 @@ function UserManagementPage({ user }: Props) {
                                 onPageChange={goToPage}
                                 isLoading={isLoading}
                                 emptyStateTitle="Nenhum usuário encontrado."
-                                onCreateFirst={openCreateModal}
-                                createFirstText="Criar o primeiro usuário"
+                                onCreateFirst={planInfo?.canAddUsers ? openCreateModal : undefined}
+                                createFirstText={planInfo?.canAddUsers ? "Criar o primeiro usuário" : undefined}
                             />
                         </div>
                     </div>
@@ -326,6 +435,11 @@ function UserManagementPage({ user }: Props) {
                                                 <Dialog.Title className="text-lg font-semibold text-gray-900">
                                                     {userAction === 'create' ? 'Adicionar Usuário' : 'Editar Usuário'}
                                                 </Dialog.Title>
+                                                {userAction === 'create' && planInfo && (
+                                                    <p className="text-sm text-gray-600 mt-1">
+                                                        Usuários ativos: {planInfo.currentUserCount}/{planInfo.numberOfUsers}
+                                                    </p>
+                                                )}
                                             </div>
 
                                             <form onSubmit={e => {
