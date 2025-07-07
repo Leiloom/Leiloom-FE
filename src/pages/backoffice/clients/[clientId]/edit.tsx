@@ -13,10 +13,18 @@ import { ActionButton } from '@/components/shared/ActionButton'
 import { ComboBox } from '@/components/shared/ComboBox'
 import { usePagedData } from '@/hooks/usePagedData'
 import { getClientById, updateClientAll } from '@/services/clientService'
+import { getDetailedPaymentSummary } from '@/services/paymentService'
 import {
   createClientUserAdm,
   updateClientUser,
 } from '@/services/clientUserService'
+import {
+  getAllInstallments,
+  getClientInstallments,
+  PendingInstallment,
+  updateInstallmentStatus,
+  getClientPaymentSummary 
+} from '@/services/paymentService'
 import ClientUser from '@/services/Interfaces'
 import Client from '@/services/Interfaces'
 import { getCountries } from '@/services/countryService'
@@ -29,20 +37,297 @@ import {
 } from '@/services/addressService'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
+import {
+  User,
+  CreditCard,
+  Package,
+  Calendar,
+  DollarSign,
+  Eye,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Receipt,
+  Download,
+  Edit3
+} from 'lucide-react'
 
 interface Country {
   code: string
   name: string
 }
 
+interface InstallmentWithPayment extends PendingInstallment {
+}
+
+// Modal de alteração de status
+interface StatusChangeModalProps {
+  isOpen: boolean
+  onClose: () => void
+  installment: InstallmentWithPayment | null
+  onConfirm: (newStatus: string) => void
+  isLoading: boolean
+}
+
+function StatusChangeModal({ isOpen, onClose, installment, onConfirm, isLoading }: StatusChangeModalProps) {
+  const [selectedStatus, setSelectedStatus] = useState<string>('')
+
+  const statusOptions = [
+    { value: 'PENDING', label: 'Pendente', description: 'Aguardando pagamento', color: 'text-yellow-600' },
+    { value: 'PAID', label: 'Pago', description: 'Pagamento confirmado', color: 'text-green-600' },
+    { value: 'OVERDUE', label: 'Em Atraso', description: 'Vencimento ultrapassado', color: 'text-red-600' },
+    { value: 'CANCELLED', label: 'Cancelado', description: 'Parcela cancelada', color: 'text-gray-600' }
+  ]
+
+  const installmentStatusMap: Record<string, { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
+    PENDING: { label: 'Pendente', variant: 'warning' },
+    PAID: { label: 'Pago', variant: 'success' },
+    OVERDUE: { label: 'Em Atraso', variant: 'error' },
+    CANCELLED: { label: 'Cancelado', variant: 'info' },
+  }
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(price)
+  }
+
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString('pt-BR')
+  }
+
+  useEffect(() => {
+    if (installment) {
+      setSelectedStatus(installment.status)
+    }
+  }, [installment])
+
+  const handleConfirm = () => {
+    if (selectedStatus && selectedStatus !== installment?.status) {
+      onConfirm(selectedStatus)
+    }
+  }
+
+  if (!installment) return null
+
+  return (
+    <Transition appear show={isOpen} as={Fragment}>
+      <Dialog as="div" className="relative z-50" onClose={() => !isLoading && onClose()}>
+        <Transition.Child as={Fragment}
+          enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
+          leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black/25 backdrop-blur-sm" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <Transition.Child as={Fragment}
+              enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-lg bg-white rounded-lg shadow-xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <Dialog.Title className="text-lg font-semibold text-gray-900 flex items-center">
+                    <Edit3 className="h-5 w-5 mr-2 text-blue-600" />
+                    Alterar Status da Fatura
+                  </Dialog.Title>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  {/* Informações da Parcela */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          {installment.installmentNumber}º Parcela
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {installment.payment?.clientPlan?.plan?.name || 'Plano não encontrado'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-gray-900">
+                          {formatPrice(installment.amount)}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Vence em {formatDate(installment.dueDate)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Status atual:</span>
+                      <StatusBadge variant={installmentStatusMap[installment.status]?.variant || 'info'}>
+                        {installmentStatusMap[installment.status]?.label || installment.status}
+                      </StatusBadge>
+                    </div>
+                  </div>
+
+                  {/* Seletor de Status */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Selecione o novo status:
+                    </label>
+                    <div className="space-y-3">
+                      {statusOptions.map((option) => (
+                        <label
+                          key={option.value}
+                          className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${selectedStatus === option.value
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            }`}
+                        >
+                          <input
+                            type="radio"
+                            name="status"
+                            value={option.value}
+                            checked={selectedStatus === option.value}
+                            onChange={(e) => setSelectedStatus(e.target.value)}
+                            className="sr-only"
+                            disabled={isLoading}
+                          />
+                          <div className="flex-1">
+                            <div className={`font-medium ${option.color}`}>
+                              {option.label}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {option.description}
+                            </div>
+                          </div>
+                          {selectedStatus === option.value && (
+                            <CheckCircle className="h-5 w-5 text-blue-600" />
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Aviso se for marcar como pago */}
+                  {selectedStatus === 'PAID' && installment.status !== 'PAID' && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 mr-3" />
+                        <div>
+                          <h4 className="text-sm font-medium text-green-800">
+                            Confirmar Pagamento
+                          </h4>
+                          <p className="text-sm text-green-700 mt-1">
+                            Ao marcar como "Pago", esta parcela será considerada quitada e não aparecerá mais nas pendências.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Aviso se for marcar como em atraso */}
+                  {selectedStatus === 'OVERDUE' && installment.status !== 'OVERDUE' && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 mr-3" />
+                        <div>
+                          <h4 className="text-sm font-medium text-red-800">
+                            Marcar como Atrasado
+                          </h4>
+                          <p className="text-sm text-red-700 mt-1">
+                            Esta parcela será marcada como em atraso e o cliente será notificado.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
+                  <Button
+                    type="button"
+                    variant="neutral"
+                    onClick={onClose}
+                    disabled={isLoading}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleConfirm}
+                    disabled={isLoading || selectedStatus === installment.status}
+                  >
+                    {isLoading ? 'Atualizando...' : 'Confirmar Alteração'}
+                  </Button>
+                </div>
+              </Dialog.Panel>
+            </Transition.Child>
+          </div>
+        </div>
+      </Dialog>
+    </Transition>
+  )
+}
+
 function ClientEditPage() {
   const router = useRouter()
   const params = useParams<{ clientId: string }>()
   const clientId = params?.clientId
+
+  // Estados principais
   const [client, setClient] = useState<Client | null>(null)
   const [users, setUsers] = useState<ClientUser[]>([])
+  const [installments, setInstallments] = useState<InstallmentWithPayment[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'invoices' | 'plans'>('info')
 
+  // Estados para modais
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false)
+  const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false)
+  const [isStatusChangeModalOpen, setIsStatusChangeModalOpen] = useState(false)
+  const [userAction, setUserAction] = useState<'create' | 'edit'>('create')
+  const [editingUser, setEditingUser] = useState<ClientUser | null>(null)
+  const [selectedInstallment, setSelectedInstallment] = useState<InstallmentWithPayment | null>(null)
+
+  // Estados para endereço
+  const [isLoadingCountries, setIsLoadingCountries] = useState(false)
+  const [isLoadingStates, setIsLoadingStates] = useState(false)
+  const [isLoadingCities, setIsLoadingCities] = useState(false)
+  const [isLoadingCep, setIsLoadingCep] = useState(false)
+  const [countries, setCountries] = useState<Country[]>([])
+  const [states, setStates] = useState<State[]>([])
+  const [cities, setCities] = useState<City[]>([])
+
+  // Filtros para faturas
+  const [installmentSearchTerm, setInstallmentSearchTerm] = useState('')
+  const [installmentStatusFilter, setInstallmentStatusFilter] = useState<string>('all')
+  const [filteredInstallments, setFilteredInstallments] = useState<InstallmentWithPayment[]>([])
+
+  function isInstallmentOverdue(installment: InstallmentWithPayment): boolean {
+    if (installment.status === 'OVERDUE') return true
+
+    if (installment.status === 'PAID' || installment.status === 'CANCELLED') return false
+
+    if (installment.status === 'PENDING') {
+      const today = new Date()
+      today.setHours(23, 59, 59, 999)
+
+      const dueDate = new Date(installment.dueDate)
+      dueDate.setHours(23, 59, 59, 999)
+
+      return dueDate < today
+    }
+
+    return false
+  }
+
+  // Função para obter o status real da parcela (considerando atraso automático)
+  function getRealInstallmentStatus(installment: InstallmentWithPayment): string {
+    if (isInstallmentOverdue(installment) && installment.status === 'PENDING') {
+      return 'OVERDUE'
+    }
+    return installment.status
+  }
+
+  // Mapeamentos
   const statusMap: Record<Client['status'], { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
     PENDING: { label: 'Pendente', variant: 'warning' },
     CONFIRMED: { label: 'Confirmado', variant: 'info' },
@@ -57,22 +342,32 @@ function ClientEditPage() {
     ClientOperator: { label: 'Operador', variant: 'error' },
   }
 
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false)
-  const [userAction, setUserAction] = useState<'create' | 'edit'>('create')
-  const [editingUser, setEditingUser] = useState<ClientUser | null>(null)
-  const [isLoadingCountries, setIsLoadingCountries] = useState(false)
-  const [isLoadingStates, setIsLoadingStates] = useState(false)
-  const [isLoadingCities, setIsLoadingCities] = useState(false)
-  const [isLoadingCep, setIsLoadingCep] = useState(false)
+  const installmentStatusMap: Record<string, { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
+    PENDING: { label: 'Pendente', variant: 'warning' },
+    PAID: { label: 'Pago', variant: 'success' },
+    OVERDUE: { label: 'Em Atraso', variant: 'error' },
+    CANCELLED: { label: 'Cancelado', variant: 'info' },
+  }
 
-  const [countries, setCountries] = useState<Country[]>([])
-  const [states, setStates] = useState<State[]>([])
-  const [cities, setCities] = useState<City[]>([])
+  // Paginação
+  const {
+    currentPage: usersCurrentPage,
+    totalPages: usersTotalPages,
+    paginatedData: paginatedUsers,
+    goToPage: goToUsersPage,
+    resetToFirstPage: resetUsersPage
+  } = usePagedData(users, 10)
 
-  const { currentPage, totalPages, paginatedData, goToPage, resetToFirstPage } =
-    usePagedData(users, 10)
+  const {
+    currentPage: installmentsCurrentPage,
+    totalPages: installmentsTotalPages,
+    paginatedData: paginatedInstallments,
+    goToPage: goToInstallmentsPage,
+    resetToFirstPage: resetInstallmentsPage
+  } = usePagedData(filteredInstallments, 10)
 
-  const columns = [
+  // Colunas da tabela de usuários
+  const userColumns = [
     { key: 'name', header: 'Nome' },
     { key: 'email', header: 'Email', className: 'hidden sm:table-cell' },
     { key: 'phone', header: 'Telefone', className: 'hidden md:table-cell' },
@@ -111,6 +406,112 @@ function ClientEditPage() {
     }
   ]
 
+  // Colunas da tabela de faturas
+  const installmentColumns = [
+    {
+      key: 'installmentNumber',
+      header: 'Parcela',
+      render: (installmentNumber: number, item: InstallmentWithPayment) => (
+        <div>
+          <div className="font-semibold text-gray-900">
+            {installmentNumber}º parcela
+          </div>
+          <div className="text-sm text-gray-600">
+            {item.payment?.clientPlan?.plan?.name || 'Plano não encontrado'}
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'amount',
+      header: 'Valor',
+      render: (amount: number) => (
+        <span className="font-bold text-lg text-gray-900">{formatPrice(amount)}</span>
+      )
+    },
+    {
+      key: 'dueDate',
+      header: 'Vencimento',
+      render: (dueDate: Date, item: InstallmentWithPayment) => {
+        const isOverdue = isInstallmentOverdue(item)
+        return (
+          <div className={`font-medium ${isOverdue ? 'text-red-600' : 'text-gray-900'}`}>
+            {formatDate(dueDate)}
+            {isOverdue && (
+              <div className="text-xs text-red-500 flex items-center mt-1">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                Vencida
+              </div>
+            )}
+          </div>
+        )
+      }
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (status: string, item: InstallmentWithPayment) => {
+        const realStatus = getRealInstallmentStatus(item)
+        return (
+          <StatusBadge variant={installmentStatusMap[realStatus]?.variant || 'info'}>
+            {installmentStatusMap[realStatus]?.label || realStatus}
+          </StatusBadge>
+        )
+      }
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      render: (_: any, item: InstallmentWithPayment) => (
+        <div className="flex space-x-2">
+          <ActionButton
+            variant="view"
+            onClick={() => handleViewInstallmentDetails(item)}
+            disabled={isLoading}
+          />
+          <button
+            onClick={() => handleChangeInstallmentStatus(item)}
+            disabled={isLoading}
+            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center"
+            title="Alterar Status"
+          >
+            <Edit3 className="h-3 w-3 mr-1" />
+            Status
+          </button>
+        </div>
+      )
+    }
+  ]
+
+  // Tabs
+  const tabs = [
+    { id: 'info', label: 'Informações', icon: User },
+    { id: 'users', label: 'Usuários', icon: User },
+    { id: 'invoices', label: 'Faturas', icon: CreditCard },
+    { id: 'plans', label: 'Planos', icon: Package }
+  ]
+
+  const [planInfo, setPlanInfo] = useState<{
+  planName: string
+  numberOfUsers: number
+  currentUserCount: number
+  canAddUsers: boolean
+  isTrial: boolean
+} | null>(null)
+
+  // Funções utilitárias
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(price)
+  }
+
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString('pt-BR')
+  }
+
+  // Effects
   useEffect(() => {
     if (!clientId) return;
     loadAll();
@@ -126,6 +527,66 @@ function ClientEditPage() {
     if (!client?.state) return
     loadCities()
   }, [client?.state])
+
+  useEffect(() => {
+    filterInstallments()
+  }, [installments, installmentSearchTerm, installmentStatusFilter])
+
+async function loadAll() {
+  setIsLoading(true);
+  try {
+    const c = await getClientById(clientId!);
+    setClient(c);
+    setUsers(c.clientUsers || []);
+    resetUsersPage();
+
+    // ✅ CORREÇÃO: Carregar plano DEPOIS de ter os usuários
+    await loadClientPlanInfo(c.clientUsers || []); // Passar usuários como parâmetro
+    
+    // Carregar faturas do cliente
+    await loadInstallments();
+  } catch {
+    toast.error('Erro ao carregar dados do cliente');
+  } finally {
+    setIsLoading(false);
+  }
+}
+
+async function loadClientPlanInfo(currentUsers?: ClientUser[]) {
+  try {
+    const paymentSummary = await getClientPaymentSummary(clientId!)
+
+    if (paymentSummary.currentPlan) {
+      const usersToCount = currentUsers || users
+      const activeUsers = usersToCount.filter(u => u.status !== 'EXCLUDED').length
+      
+      const maxUsers = paymentSummary.currentPlan.period?.isTrial 
+        ? 1 // Trial permite apenas 1 usuário
+        : (paymentSummary.currentPlan.numberOfUsers || 5) // Usar numberOfUsers do plano
+
+      setPlanInfo({
+        planName: paymentSummary.currentPlan.planName,
+        numberOfUsers: maxUsers,
+        currentUserCount: activeUsers,
+        canAddUsers: activeUsers < maxUsers,
+        isTrial: paymentSummary.currentPlan.period?.isTrial || false
+      })
+    }
+  } catch (error) {
+    console.error('Erro ao carregar informações do plano:', error)
+  }
+}
+
+  async function loadInstallments() {
+    try {
+      // Usar o endpoint específico para buscar parcelas do cliente
+      const installmentsData = await getClientInstallments(clientId!);
+      setInstallments(installmentsData);
+    } catch (error) {
+      console.error('Erro ao carregar parcelas:', error);
+      toast.error('Erro ao carregar faturas do cliente');
+    }
+  }
 
   async function loadCountries() {
     setIsLoadingCountries(true);
@@ -193,6 +654,50 @@ function ClientEditPage() {
     }
   }
 
+  // Adicionar esta função antes das outras funções
+function openCreateUserModal() {
+  if (planInfo && !planInfo.canAddUsers) {
+    const message = planInfo.isTrial 
+      ? `Limite atingido! Este cliente está no plano trial que permite apenas 1 usuário. O cliente precisa fazer upgrade para adicionar mais usuários.`
+      : `Limite de usuários atingido! O plano "${planInfo.planName}" permite no máximo ${planInfo.numberOfUsers} usuários ativos.`
+    
+    toast.error(message)
+    return
+  }
+
+  setUserAction('create');
+  setEditingUser(null);
+  setIsUserModalOpen(true)
+}
+
+  // Funções de filtro
+  function filterInstallments() {
+    let filtered = [...installments]
+
+    if (installmentSearchTerm) {
+      const term = installmentSearchTerm.toLowerCase()
+      filtered = filtered.filter(installment =>
+        installment.payment?.clientPlan?.plan?.name?.toLowerCase().includes(term) ||
+        installment.installmentNumber.toString().includes(term) ||
+        formatPrice(installment.amount).toLowerCase().includes(term)
+      )
+    }
+
+    if (installmentStatusFilter !== 'all') {
+      filtered = filtered.filter(installment => {
+        const realStatus = getRealInstallmentStatus(installment)
+        return realStatus === installmentStatusFilter
+      })
+    }
+
+    // Ordenar por data de vencimento
+    filtered.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+
+    setFilteredInstallments(filtered)
+    resetInstallmentsPage()
+  }
+
+  // Funções de manipulação
   async function handleCepChange(cep: string) {
     const cleanCep = cep.replace(/\D/g, '')
 
@@ -221,20 +726,6 @@ function ClientEditPage() {
     }
   }
 
-  async function loadAll() {
-    setIsLoading(true);
-    try {
-      const c = await getClientById(clientId!);
-      setClient(c);
-      setUsers(c.clientUsers || []);
-      resetToFirstPage();
-    } catch {
-      toast.error('Erro ao carregar dados do cliente');
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   async function saveClient(form: Partial<Client>) {
     setIsLoading(true)
     try {
@@ -248,26 +739,83 @@ function ClientEditPage() {
     }
   }
 
-  async function saveUser(payload: Partial<ClientUser> & { password?: string }) {
+async function saveUser(payload: Partial<ClientUser> & { password?: string }) {
+  // ✅ Validação para criação de novo usuário
+  if (userAction === 'create' && planInfo && !planInfo.canAddUsers) {
+    const message = planInfo.isTrial 
+      ? 'Limite atingido! Planos trial permitem apenas 1 usuário. Cliente precisa fazer upgrade para adicionar mais usuários.'
+      : `Limite de usuários atingido! O plano "${planInfo.planName}" permite no máximo ${planInfo.numberOfUsers} usuários.`
+    
+    toast.error(message)
+    return
+  }
+
+  setIsLoading(true)
+  try {
+    if (userAction === 'edit' && editingUser?.id) {
+      await updateClientUser(editingUser.id, payload)
+      toast.success('Usuário atualizado')
+    } else {
+      await createClientUserAdm({ ...payload as ClientUser, clientId: clientId! })
+      toast.success('Usuário criado')
+    }
+    setIsUserModalOpen(false)
+    await loadAll()
+  } catch (error: any) {
+    if (error?.response?.status === 409) {
+      toast.error('Este email já está vinculado a um usuário. Escolha outro email.')
+    } else if (error?.message?.includes('limite') || error?.message?.includes('limit')) {
+      toast.error('Limite de usuários do plano atingido!')
+    } else {
+      toast.error('Erro ao salvar usuário')
+    }
+  } finally {
+    setIsLoading(false)
+  }
+}
+
+  async function handleViewInstallmentDetails(installment: InstallmentWithPayment) {
+    setSelectedInstallment(installment)
+    setIsInstallmentModalOpen(true)
+  }
+
+  async function handleChangeInstallmentStatus(installment: InstallmentWithPayment) {
+    setSelectedInstallment(installment)
+    setIsStatusChangeModalOpen(true)
+  }
+
+  async function handleStatusChangeConfirm(newStatus: string) {
+    if (!selectedInstallment) return
+
     setIsLoading(true)
     try {
-      if (userAction === 'edit' && editingUser?.id) {
-        await updateClientUser(editingUser.id, payload)
-        toast.success('Usuário atualizado')
-      } else {
-        await createClientUserAdm({ ...payload as ClientUser, clientId: clientId! })
-        toast.success('Usuário criado')
-      }
-      setIsUserModalOpen(false)
-      loadAll()
-    } catch {
-      toast.error('Erro ao salvar usuário')
+      await updateInstallmentStatus(selectedInstallment.id, newStatus)
+      toast.success('Status da fatura atualizado com sucesso!')
+      setIsStatusChangeModalOpen(false)
+      setSelectedInstallment(null)
+      await loadInstallments()
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error)
+      toast.error('Erro ao atualizar status da fatura')
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Estatísticas das faturas corrigidas
+  const getInstallmentStats = () => {
+    const total = filteredInstallments.length
+    const pending = filteredInstallments.filter(i => getRealInstallmentStatus(i) === 'PENDING').length
+    const paid = filteredInstallments.filter(i => getRealInstallmentStatus(i) === 'PAID').length
+    const overdue = filteredInstallments.filter(i => getRealInstallmentStatus(i) === 'OVERDUE').length
+    const cancelled = filteredInstallments.filter(i => getRealInstallmentStatus(i) === 'CANCELLED').length
+
+    return { total, pending, paid, overdue, cancelled }
+  }
+
   if (!client) return null
+
+  const stats = getInstallmentStats()
 
   return (
     <MainLayout>
@@ -282,248 +830,444 @@ function ClientEditPage() {
               onButtonClick={() => saveClient(client!)}
               isLoading={isLoading}
               isDetailsPage={true}
+              isDisablesPage={(planInfo ? !planInfo.canAddUsers : false)}
             />
           </div>
 
-          {/* Informações do Cliente */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Informações do Cliente</h2>
+          {/* Tabs Navigation */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+            <div className="border-b border-gray-200">
+              <nav className="flex space-x-8 px-6" aria-label="Tabs">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={`${activeTab === tab.id
+                          ? 'border-yellow-500 text-yellow-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        } flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}
+                    >
+                      <Icon className="h-5 w-5 mr-2" />
+                      {tab.label}
+                    </button>
+                  )
+                })}
+              </nav>
             </div>
 
-            <div className="p-6 space-y-6">
-              {/* Dados principais */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                  <Input
-                    id="name"
-                    name="name"
-                    type="text"
-                    placeholder='Digite o nome do cliente'
-                    value={client.name}
-                    onChange={e => setClient({ ...client, name: e.target.value })}
-                    disabled={isLoading}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder='Digite o email da empresa'
-                    value={client.email || ''}
-                    onChange={e => setClient({ ...client, email: e.target.value })}
-                    disabled
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CPF/CNPJ</label>
-                  <Input
-                    id="cpfCnpj"
-                    name="cpfCnpj"
-                    type="text"
-                    placeholder='Digite o CPF ou CNPJ do cliente'
-                    value={client.cpfCnpj}
-                    onChange={e => setClient({ ...client, cpfCnpj: e.target.value })}
-                    disabled={isLoading}
-                  />
-                </div>
-              </div>
+            {/* Tab Content */}
+            <div className="p-6">
+              {/* Informações do Cliente */}
+              {activeTab === 'info' && (
+                <div className="space-y-6">
+                  <h2 className="text-lg font-semibold text-gray-900">Informações do Cliente</h2>
 
-              {/* Endereço */}
-              <div>
-                <h3 className="text-md font-medium text-gray-900 mb-3">Endereço</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
-                  {/* País */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
-                    <ComboBox
-                      value={client.country ?? ''}
-                      onChange={(value) => {
-                        setClient({ ...client, country: value, state: '', city: '' })
-                        setStates([])
-                        setCities([])
-                      }}
-                      options={countries.map(c => ({ value: c.name, label: c.name }))}
-                      placeholder="Digite ou selecione o país"
-                      disabled={isLoading}
-                      isLoading={isLoadingCountries}
-                      allowCustomValue={true}
-                    />
-                  </div>
-
-                  {/* CEP */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
-                    <div className="relative">
+                  {/* Dados principais */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
                       <Input
-                        id="cep"
-                        name="cep"
+                        id="name"
+                        name="name"
                         type="text"
-                        value={client.cep ?? ''}
-                        onChange={e => {
-                          const value = e.target.value
-                          setClient({ ...client, cep: value })
-                          handleCepChange(value)
-                        }}
+                        placeholder='Digite o nome do cliente'
+                        value={client.name}
+                        onChange={e => setClient({ ...client, name: e.target.value })}
                         disabled={isLoading}
-                        placeholder="00000-000"
                       />
-                      {isLoadingCep && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-500"></div>
-                        </div>
-                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder='Digite o email da empresa'
+                        value={client.email || ''}
+                        onChange={e => setClient({ ...client, email: e.target.value })}
+                        disabled
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">CPF/CNPJ</label>
+                      <Input
+                        id="cpfCnpj"
+                        name="cpfCnpj"
+                        type="text"
+                        placeholder='Digite o CPF ou CNPJ do cliente'
+                        value={client.cpfCnpj}
+                        onChange={e => setClient({ ...client, cpfCnpj: e.target.value })}
+                        disabled={isLoading}
+                      />
                     </div>
                   </div>
 
-                  {/* Estado */}
+                  {/* Endereço */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                    <ComboBox
-                      value={client.state ?? ''}
-                      onChange={(value) => {
-                        setClient({ ...client, state: value, city: '' })
-                        setCities([])
-                      }}
-                      options={states.map(s => ({ value: s.name, label: s.name }))}
-                      placeholder="Digite ou selecione o estado"
-                      disabled={isLoading || !client.country}
-                      isLoading={isLoadingStates}
-                      allowCustomValue={true}
-                    />
+                    <h3 className="text-md font-medium text-gray-900 mb-3">Endereço</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {/* País */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
+                        <ComboBox
+                          value={client.country ?? ''}
+                          onChange={(value) => {
+                            setClient({ ...client, country: value, state: '', city: '' })
+                            setStates([])
+                            setCities([])
+                          }}
+                          options={countries.map(c => ({ value: c.name, label: c.name }))}
+                          placeholder="Digite ou selecione o país"
+                          disabled={isLoading}
+                          isLoading={isLoadingCountries}
+                          allowCustomValue={true}
+                        />
+                      </div>
+
+                      {/* CEP */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+                        <div className="relative">
+                          <Input
+                            id="cep"
+                            name="cep"
+                            type="text"
+                            value={client.cep ?? ''}
+                            onChange={e => {
+                              const value = e.target.value
+                              setClient({ ...client, cep: value })
+                              handleCepChange(value)
+                            }}
+                            disabled={isLoading}
+                            placeholder="00000-000"
+                          />
+                          {isLoadingCep && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-500"></div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Estado */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                        <ComboBox
+                          value={client.state ?? ''}
+                          onChange={(value) => {
+                            setClient({ ...client, state: value, city: '' })
+                            setCities([])
+                          }}
+                          options={states.map(s => ({ value: s.name, label: s.name }))}
+                          placeholder="Digite ou selecione o estado"
+                          disabled={isLoading || !client.country}
+                          isLoading={isLoadingStates}
+                          allowCustomValue={true}
+                        />
+                      </div>
+
+                      {/* Cidade */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                        <ComboBox
+                          value={client.city ?? ''}
+                          onChange={(value) => setClient({ ...client, city: value })}
+                          options={cities.map(c => ({ value: c.name, label: c.name }))}
+                          placeholder="Digite ou selecione a cidade"
+                          disabled={isLoading || !client.country}
+                          isLoading={isLoadingCities}
+                          allowCustomValue={true}
+                        />
+                      </div>
+
+                      {/* Número */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                        <Input
+                          id="number"
+                          name="number"
+                          type="text"
+                          value={client.number ?? ''}
+                          onChange={e => setClient({ ...client, number: e.target.value })}
+                          disabled={isLoading}
+                          placeholder="1234"
+                        />
+                      </div>
+
+                      {/* Complemento */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Complemento</label>
+                        <Input
+                          id="complement"
+                          name="complement"
+                          type="text"
+                          value={client.complement ?? ''}
+                          onChange={e => setClient({ ...client, complement: e.target.value })}
+                          disabled={isLoading}
+                          placeholder="Apto 101, Bloco B, etc."
+                        />
+                      </div>
+
+                      {/* Bairro */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                        <Input
+                          id="neighborhood"
+                          name="neighborhood"
+                          type="text"
+                          value={client.neighborhood ?? ''}
+                          onChange={e => setClient({ ...client, neighborhood: e.target.value })}
+                          disabled={isLoading}
+                          placeholder="Jardim das Flores"
+                        />
+                      </div>
+
+                      {/* Rua */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Rua</label>
+                        <Input
+                          id="street"
+                          name="street"
+                          type="text"
+                          value={client.street ?? ''}
+                          onChange={e => setClient({ ...client, street: e.target.value })}
+                          disabled={isLoading}
+                          placeholder="Rua das Palmeiras"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Cidade */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
-                    <ComboBox
-                      value={client.city ?? ''}
-                      onChange={(value) => setClient({ ...client, city: value })}
-                      options={cities.map(c => ({ value: c.name, label: c.name }))}
-                      placeholder="Digite ou selecione a cidade"
-                      disabled={isLoading || !client.country}
-                      isLoading={isLoadingCities}
-                      allowCustomValue={true}
-                    />
-                  </div>
-
-                  {/* Número */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
-                    <Input
-                      id="number"
-                      name="number"
-                      type="text"
-                      value={client.number ?? ''}
-                      onChange={e => setClient({ ...client, number: e.target.value })}
-                      disabled={isLoading}
-                      placeholder="1234"
-                    />
-                  </div>
-
-                  {/* Complemento */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Complemento</label>
-                    <Input
-                      id="complement"
-                      name="complement"
-                      type="text"
-                      value={client.complement ?? ''}
-                      onChange={e => setClient({ ...client, complement: e.target.value })}
-                      disabled={isLoading}
-                      placeholder="Apto 101, Bloco B, etc."
-                    />
-                  </div>
-
-                  {/* Bairro */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
-                    <Input
-                      id="neighborhood"
-                      name="neighborhood"
-                      type="text"
-                      value={client.neighborhood ?? ''}
-                      onChange={e => setClient({ ...client, neighborhood: e.target.value })}
-                      disabled={isLoading}
-                      placeholder="Jardim das Flores"
-                    />
-                  </div>
-
-                  {/* Rua */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rua</label>
-                    <Input
-                      id="street"
-                      name="street"
-                      type="text"
-                      value={client.street ?? ''}
-                      onChange={e => setClient({ ...client, street: e.target.value })}
-                      disabled={isLoading}
-                      placeholder="Rua das Palmeiras"
-                    />
+                  {/* Status */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Situação</label>
+                      <select
+                        value={client.status}
+                        onChange={e => setClient({ ...client, status: e.target.value as any })}
+                        className="w-full text-gray-700 border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                        disabled={isLoading}
+                      >
+                        <option value="" disabled>Selecione...</option>
+                        <option value="PENDING">Pendente</option>
+                        <option value="CONFIRMED">Confirmado</option>
+                        <option value="APPROVED">Aprovado</option>
+                        <option value="EXCLUDED">Excluído</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Status */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Situação</label>
-                  <select
-                    value={client.status}
-                    onChange={e => setClient({ ...client, status: e.target.value as any })}
-                    className="w-full text-gray-700 border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
-                    disabled={isLoading}
-                  >
-                    <option value="" disabled>Selecione...</option>
-                    <option value="PENDING">Pendente</option>
-                    <option value="CONFIRMED">Confirmado</option>
-                    <option value="APPROVED">Aprovado</option>
-                    <option value="EXCLUDED">Excluído</option>
-                  </select>
-                </div>
-              </div>
+              {/* Usuários */}
+{activeTab === 'users' && (
+  <div className="space-y-6">
+    {/* ✅ NOVO: Card de Informações do Plano */}
+    {planInfo && (
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+              planInfo.canAddUsers ? 'bg-green-100' : 'bg-red-100'
+            }`}>
+              {planInfo.canAddUsers ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              )}
+            </div>
+            <div>
+              <p className="font-medium text-gray-900">
+                Plano: {planInfo.planName} {planInfo.isTrial && "(Trial)"}
+              </p>
+              <p className="text-sm text-gray-600">
+                Usuários: {planInfo.currentUserCount}/{planInfo.numberOfUsers}
+              </p>
             </div>
           </div>
-
-          {/* Seção de Usuários */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <h2 className="text-lg font-semibold text-gray-900">Usuários do Cliente</h2>
-                <Button
-                  variant="add" onClick={() => {
-                    setUserAction('create');
-                    setEditingUser(null);
-                    setIsUserModalOpen(true)
-                  }}
-                  disabled={isLoading}>
-                  Novo Usuário
-                </Button>
-              </div>
+          {!planInfo.canAddUsers && (
+            <div className="text-right">
+              <p className="text-sm font-medium text-red-600">Limite atingido</p>
+              <p className="text-xs text-red-500">
+                {planInfo.isTrial ? 'Trial permite 1 usuário' : 'Upgrade necessário'}
+              </p>
             </div>
+          )}
+        </div>
+        
+        {!planInfo.canAddUsers && (
+          <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-700">
+              {planInfo.isTrial 
+                ? `Este cliente está no plano trial que permite apenas 1 usuário. Para adicionar mais usuários, o cliente precisa fazer upgrade para um plano pago.`
+                : `O plano "${planInfo.planName}" permite no máximo ${planInfo.numberOfUsers} usuários ativos.`
+              }
+            </p>
+          </div>
+        )}
+      </div>
+    )}
 
-            <div className="overflow-hidden">
-              <DataTable
-                data={paginatedData}
-                columns={columns}
-                currentPage={currentPage}
-                totalPages={totalPages}
-                itemsPerPage={10}
-                onPageChange={goToPage}
-                isLoading={isLoading}
-                emptyStateTitle="Nenhum usuário cadastrado."
-                onCreateFirst={() => {
-                  setUserAction('create');
-                  setEditingUser(null);
-                  setIsUserModalOpen(true)
-                }}
-                createFirstText="Criar o primeiro usuário"
-              />
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <h2 className="text-lg font-semibold text-gray-900">Usuários do Cliente</h2>
+      <Button
+        variant="add"
+        onClick={openCreateUserModal} 
+        disabled={isLoading || (planInfo ? !planInfo.canAddUsers : false)} // ✅ Disable se limite atingido
+      >
+        Novo Usuário
+      </Button>
+    </div>
+
+    <div className="overflow-hidden">
+      <DataTable
+        data={paginatedUsers}
+        columns={userColumns}
+        currentPage={usersCurrentPage}
+        totalPages={usersTotalPages}
+        itemsPerPage={10}
+        onPageChange={goToUsersPage}
+        isLoading={isLoading}
+        emptyStateTitle="Nenhum usuário cadastrado."
+        onCreateFirst={planInfo?.canAddUsers !== false ? openCreateUserModal : undefined} // ✅ Mudança aqui
+        createFirstText={planInfo?.canAddUsers !== false ? "Criar o primeiro usuário" : undefined}
+      />
+    </div>
+  </div>
+)}
+
+              {/* Faturas */}
+              {activeTab === 'invoices' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <h2 className="text-lg font-semibold text-gray-900">Faturas do Cliente</h2>
+                  </div>
+
+                  {/* Filtros das Faturas */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
+                      <Input
+                        id="installmentSearch"
+                        name="installmentSearch"
+                        type="text"
+                        placeholder="Plano, parcela, valor..."
+                        value={installmentSearchTerm}
+                        onChange={e => setInstallmentSearchTerm(e.target.value)}
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <select
+                        value={installmentStatusFilter}
+                        onChange={e => setInstallmentStatusFilter(e.target.value)}
+                        className="w-full text-gray-700 border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                        disabled={isLoading}
+                      >
+                        <option value="all">Todos os status</option>
+                        <option value="PENDING">Pendente</option>
+                        <option value="PAID">Pago</option>
+                        <option value="OVERDUE">Em Atraso</option>
+                        <option value="CANCELLED">Cancelado</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Estatísticas das Faturas - Corrigidas */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-center">
+                        <div className="h-8 w-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                          <CreditCard className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <p className="text-sm text-gray-600">Total</p>
+                        <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-center">
+                        <div className="h-8 w-8 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                          <Clock className="h-4 w-4 text-yellow-600" />
+                        </div>
+                        <p className="text-sm text-gray-600">Pendentes</p>
+                        <p className="text-xl font-bold text-yellow-600">{stats.pending}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-center">
+                        <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        </div>
+                        <p className="text-sm text-gray-600">Pagas</p>
+                        <p className="text-xl font-bold text-green-600">{stats.paid}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-center">
+                        <div className="h-8 w-8 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                          <AlertTriangle className="h-4 w-4 text-red-600" />
+                        </div>
+                        <p className="text-sm text-gray-600">Em Atraso</p>
+                        <p className="text-xl font-bold text-red-600">{stats.overdue}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Alerta de Parcelas em Atraso */}
+                  {stats.overdue > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 mr-3" />
+                        <div>
+                          <h4 className="text-sm font-medium text-red-800">
+                            {stats.overdue} parcela{stats.overdue > 1 ? 's' : ''} em atraso
+                          </h4>
+                          <p className="text-sm text-red-700 mt-1">
+                            Este cliente possui {stats.overdue} fatura{stats.overdue > 1 ? 's' : ''} vencida{stats.overdue > 1 ? 's' : ''}.
+                            Considere entrar em contato para regularizar a situação.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="overflow-hidden">
+                    <DataTable
+                      data={paginatedInstallments}
+                      columns={installmentColumns}
+                      currentPage={installmentsCurrentPage}
+                      totalPages={installmentsTotalPages}
+                      itemsPerPage={10}
+                      onPageChange={goToInstallmentsPage}
+                      isLoading={isLoading}
+                      emptyStateTitle="Nenhuma fatura encontrada."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Planos */}
+              {activeTab === 'plans' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <h2 className="text-lg font-semibold text-gray-900">Planos do Cliente</h2>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                    <div className="flex items-center">
+                      <div>
+                        <h3 className="text-lg font-medium text-blue-900">Gestão de Planos</h3>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -671,6 +1415,128 @@ function ClientEditPage() {
               </div>
             </Dialog>
           </Transition>
+
+          {/* Modal de Detalhes da Fatura */}
+          <Transition appear show={isInstallmentModalOpen} as={Fragment}>
+            <Dialog as="div" className="relative z-50" onClose={() => setIsInstallmentModalOpen(false)}>
+              <Transition.Child as={Fragment}
+                enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
+                leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
+              >
+                <div className="fixed inset-0 bg-black/25 backdrop-blur-sm" />
+              </Transition.Child>
+
+              <div className="fixed inset-0 overflow-y-auto">
+                <div className="flex min-h-full items-center justify-center p-4">
+                  <Transition.Child as={Fragment}
+                    enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
+                    leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
+                  >
+                    <Dialog.Panel className="w-full max-w-2xl bg-white rounded-lg shadow-xl overflow-hidden">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <Dialog.Title className="text-lg font-semibold text-gray-900">
+                          Detalhes da Fatura
+                        </Dialog.Title>
+                      </div>
+
+                      {selectedInstallment && (
+                        <div className="p-6 space-y-6">
+                          {/* Header da Fatura */}
+                          <div className="text-center bg-gray-50 rounded-lg p-6">
+                            <div className="flex items-center justify-center space-x-3 mb-3">
+                              <h2 className="text-2xl font-bold text-gray-900">
+                                {selectedInstallment.installmentNumber}º Parcela
+                              </h2>
+                              <StatusBadge variant={installmentStatusMap[getRealInstallmentStatus(selectedInstallment)]?.variant || 'info'}>
+                                {installmentStatusMap[getRealInstallmentStatus(selectedInstallment)]?.label || getRealInstallmentStatus(selectedInstallment)}
+                              </StatusBadge>
+                            </div>
+                            <div className="text-3xl font-bold text-gray-900 mb-2">
+                              {formatPrice(selectedInstallment.amount)}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              Plano: {selectedInstallment.payment?.clientPlan?.plan?.name || 'Não encontrado'}
+                            </div>
+                            {isInstallmentOverdue(selectedInstallment) && (
+                              <div className="mt-3 text-red-600 text-sm font-medium flex items-center justify-center">
+                                <AlertTriangle className="h-4 w-4 mr-1" />
+                                Fatura vencida
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Informações da Fatura */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <h3 className="text-sm font-medium text-gray-900 mb-3">Informações de Pagamento</h3>
+                              <div className="space-y-2">
+                                <div className="flex justify-between">
+                                  <span className="text-sm text-gray-600">Status:</span>
+                                  <StatusBadge variant={installmentStatusMap[getRealInstallmentStatus(selectedInstallment)]?.variant || 'info'}>
+                                    {installmentStatusMap[getRealInstallmentStatus(selectedInstallment)]?.label || getRealInstallmentStatus(selectedInstallment)}
+                                  </StatusBadge>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <h3 className="text-sm font-medium text-gray-900 mb-3">Informações do Cliente</h3>
+                              <div className="space-y-2">
+                                <div className="flex justify-between">
+                                  <span className="text-sm text-gray-600">Cliente:</span>
+                                  <span className="text-sm font-medium text-gray-900">{client.name}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-sm text-gray-600">Email:</span>
+                                  <span className="text-sm font-medium text-gray-900">{client.email}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-sm text-gray-600">CPF/CNPJ:</span>
+                                  <span className="text-sm font-medium text-gray-900">{client.cpfCnpj}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Ações */}
+                          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
+                            <Button
+                              type="button"
+                              onClick={() => setIsInstallmentModalOpen(false)}
+                              variant="neutral"
+                            >
+                              Fechar
+                            </Button>
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                setIsInstallmentModalOpen(false)
+                                handleChangeInstallmentStatus(selectedInstallment)
+                              }}
+                              variant="primary"
+                            >
+                              Alterar Status
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </Dialog.Panel>
+                  </Transition.Child>
+                </div>
+              </div>
+            </Dialog>
+          </Transition>
+
+          <StatusChangeModal
+            isOpen={isStatusChangeModalOpen}
+            onClose={() => {
+              setIsStatusChangeModalOpen(false)
+              setSelectedInstallment(null)
+            }}
+            installment={selectedInstallment}
+            onConfirm={handleStatusChangeConfirm}
+            isLoading={isLoading}
+          />
 
         </div>
       </div>

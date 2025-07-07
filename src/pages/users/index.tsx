@@ -156,8 +156,8 @@ function UserManagementPage({ user }: Props) {
             if (paymentSummary.currentPlan) {
                 const activeUsers = usersData.filter(u => u.status !== 'EXCLUDED').length
                 const maxUsers = paymentSummary.currentPlan.period?.isTrial 
-                    ? 999 // Trial pode ter usuários ilimitados
-                    : 5 // Default se não tiver numberOfUsers definido no plano
+                    ? 1 // Trial pode ter usuários somente um
+                    : (paymentSummary.currentPlan?.numberOfUsers || 5)// Default se não tiver numberOfUsers definido no plano
 
                 setPlanInfo({
                     planName: paymentSummary.currentPlan.planName,

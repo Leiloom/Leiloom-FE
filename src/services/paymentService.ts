@@ -23,6 +23,7 @@ export interface DetailedPaymentSummary extends PaymentSummary {
         totalAmount: number
         installments: number
         paymentMethod: string
+        numberOfUsers: number
         period: {
             startsAt: Date
             expiresAt: Date
@@ -201,4 +202,67 @@ export async function getAllInstallments(): Promise<PendingInstallment[]> {
         return handleAuthError(error, 'Erro ao buscar todas as parcelas.')
     }
 }
+
+/**
+ * Busca todas as parcelas de um cliente específico (BackOffice)
+ */
+export async function getClientInstallments(clientId: string): Promise<PendingInstallment[]> {
+    try {
+        const response = await api.get(`/payments/admin/client/${clientId}/installments`)
+
+        return response.data.map((installment: any) => ({
+            ...installment,
+            dueDate: new Date(installment.dueDate),
+            paidAt: installment.paidAt ? new Date(installment.paidAt) : null,
+            createdAt: installment.createdAt ? new Date(installment.createdAt) : null,
+            updatedAt: installment.updatedAt ? new Date(installment.updatedAt) : null
+        }))
+    } catch (error: any) {
+        return handleAuthError(error, 'Erro ao buscar parcelas do cliente.')
+    }
+}
+
+/**
+ * Atualiza o status de uma parcela específica (BackOffice)
+ * Usa o endpoint admin para alterar status
+ */
+export async function updateInstallmentStatus(installmentId: string, status: string) {
+    try {
+        const response = await api.patch(`/payments/admin/installments/${installmentId}/status`, {
+            status: status
+        })
+        return response.data
+    } catch (error: any) {
+        return handleAuthError(error, 'Erro ao atualizar status da parcela.')
+    }
+}
+
+/**
+ * Busca resumo financeiro de um cliente específico (BackOffice)
+ */
+export async function getClientPaymentSummary(clientId: string): Promise<DetailedPaymentSummary> {
+    try {
+        const response = await api.get(`/payments/admin/client/${clientId}/summary`)
+        const data = response.data
+        
+        if (data.nextDueDate) {
+            data.nextDueDate = new Date(data.nextDueDate)
+        }
+
+        if (data.currentPlan?.period) {
+            data.currentPlan.period.startsAt = new Date(data.currentPlan.period.startsAt)
+            data.currentPlan.period.expiresAt = new Date(data.currentPlan.period.expiresAt)
+        }
+
+        data.upcomingInstallments = data.upcomingInstallments.map((installment: any) => ({
+            ...installment,
+            dueDate: new Date(installment.dueDate)
+        }))
+        
+        return data
+    } catch (error: any) {
+        return handleAuthError(error, 'Erro ao buscar resumo financeiro do cliente.')
+    }
+}
+
 

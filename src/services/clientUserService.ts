@@ -1,6 +1,7 @@
 import { api } from '@/services/api'
 import { AxiosError } from 'axios'
 import ClientUser from '@/services/Interfaces' 
+import { handleAuthError } from './authService' 
 
 /**
  * Lista usuários de um cliente
@@ -24,7 +25,7 @@ export async function createClientUserAdm(payload: Omit<ClientUser, 'id'>) {
     return response.data
   } catch (error: any) {
     console.error('Erro ao criar usuário:', error)
-    throw error
+    return handleAuthError(error, 'Erro ao criar usuário.')
   }
 }
 
@@ -37,7 +38,7 @@ export async function updateClientUser(id: string, payload: Partial<ClientUser> 
     return response.data
   } catch (error: any) {
     console.error('Erro ao atualizar usuário:', error)
-    throw error
+    return handleAuthError(error, 'Erro ao atualizar usuário.')
   }
 }
 /**
