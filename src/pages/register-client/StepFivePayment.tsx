@@ -87,7 +87,7 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
             login(token, 'CLIENT')
 
             const subscriptionData = await createSubscriptionOnly({
-                planId: selectedPlan.id??'',
+                planId: selectedPlan.id!,
                 installments: selectedInstallments,
                 paymentMethod: selectedPaymentMethod
             })

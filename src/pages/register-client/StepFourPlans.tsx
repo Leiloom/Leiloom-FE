@@ -110,15 +110,8 @@ async function handleTrialFinish() {
       clientUserId: formData.clientUserId!,
       termsId: currentTerms.id,
     })
-
-    // 3. Cria assinatura trial usando o sistema existente
-    // O PaymentService já deve detectar que é trial (plan.isTrial) e:
-    // - Criar ClientPlan com totalAmount: 0
-    // - Criar ClientPeriodPlan com isTrial: true  
-    // - Criar Payment com valor 0 (se necessário)
-    // - Marcar como pago automaticamente
     const subscriptionData = await createSubscriptionOnly({
-      planId: selectedPlan.id,
+      planId: selectedPlan.id!,
       installments: 1, // Trial sempre 1x
       paymentMethod: 'PIX' // Qualquer um, já que é grátis
     })
