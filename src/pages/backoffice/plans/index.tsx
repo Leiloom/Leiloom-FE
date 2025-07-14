@@ -12,12 +12,11 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ActionButton } from '@/components/shared/ActionButton'
 import { ConfirmationModal } from '@/components/shared/ConfirmationModal'
 import { usePagedData } from '@/hooks/usePagedData'
-import { getAllPlans, createPlan, updatePlan, deletePlan } from '@/services/planService'
+import { getAllPlans, createPlan, updatePlan, deletePlan, activatePlan, deactivatePlan } from '@/services/planService'
 import { SearchBar } from '@/components/shared/SearchBar'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
 import { Plan } from '@/types/plan'
-
 
 interface Props {
   user: TokenPayload
@@ -33,7 +32,6 @@ function PlansAdminPage({ user }: Props) {
   const [planToDelete, setPlanToDelete] = useState<Plan | null>(null)
   const [search, setSearch] = useState('')
 
-  // Estado para controlar se é trial no formulário
   const [isTrialInForm, setIsTrialInForm] = useState(false)
   const [allowInstallmentsInForm, setAllowInstallmentsInForm] = useState(false)
 
@@ -93,6 +91,24 @@ function PlansAdminPage({ user }: Props) {
     }
   }
 
+  async function handleToggleActive(plan: Plan) {
+    setIsLoading(true)
+    try {
+      if (plan.isActive) {
+        await deactivatePlan(plan.id!)
+        toast.success('Plano desativado com sucesso!')
+      } else {
+        await activatePlan(plan.id!)
+        toast.success('Plano ativado com sucesso!')
+      }
+      loadPlans()
+    } catch {
+      toast.error('Erro ao alterar status do plano')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   function handleDeleteConfirmation(plan: Plan) {
     setPlanToDelete(plan)
     setIsDeleteModalOpen(true)
@@ -132,7 +148,8 @@ function PlansAdminPage({ user }: Props) {
     {
       key: 'allowInstallments', header: 'Parcelamento', render: (allow: boolean, plan: Plan) => {
         if (!allow) return <StatusBadge variant="warning">Não</StatusBadge>
-        return <StatusBadge variant="info">Até {plan.maxInstallments}x</StatusBadge>
+        const taxInfo = plan.absorbTax ? ' (Taxa absorvida)' : ' (Taxa repassada)'
+        return <StatusBadge variant="info">Até {plan.maxInstallments}x{taxInfo}</StatusBadge>
       }
     },
     {
@@ -149,6 +166,14 @@ function PlansAdminPage({ user }: Props) {
       key: 'actions', header: 'Ações', render: (_: any, plan: Plan) => (
         <div className="flex space-x-2">
           <ActionButton variant="edit" onClick={() => handleEditPlan(plan)} disabled={isLoading} />
+          {/* <ActionButton 
+            variant="view"
+            onClick={() => handleToggleActive(plan)} 
+            disabled={isLoading}
+          >
+            {plan.isActive ? "Desativar" : "Ativar"}
+          </ActionButton>
+          <ActionButton variant="delete" onClick={() => handleDeleteConfirmation(plan)} disabled={isLoading} /> */}
         </div>
       )
     }
@@ -186,7 +211,6 @@ function PlansAdminPage({ user }: Props) {
           </div>
         </div>
 
-        {/* Modal para adicionar/editar planos */}
         <Transition appear show={isOpenModal} as={Fragment}>
           <Dialog as="div" className="relative z-10" onClose={() => !isLoading && setIsOpenModal(false)}>
             <Transition.Child
@@ -236,7 +260,7 @@ function PlansAdminPage({ user }: Props) {
                           isActive: data.get('isActive') === 'on',
                           allowInstallments: isTrialInForm ? false : allowInstallmentsInForm,
                           maxInstallments: (!isTrialInForm && allowInstallmentsInForm) ? parseInt(data.get('maxInstallments') as string) || undefined : undefined,
-                          installmentPrice: (!isTrialInForm && allowInstallmentsInForm) ? parseFloat(data.get('installmentPrice') as string) || undefined : undefined
+                          absorbTax: (!isTrialInForm && allowInstallmentsInForm) ? data.get('absorbTax') === 'on' : false
                         }
 
                         handleSave(formObj)
@@ -263,7 +287,7 @@ function PlansAdminPage({ user }: Props) {
                           name="description"
                           placeholder="Descrição do plano"
                           defaultValue={editingPlan?.description || ''}
-                          rows={2} // Diminuído o número de linhas
+                          rows={2}
                           className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-gray-500 focus:ring-yellow-500 focus:border-yellow-500"
                           disabled={isLoading}
                         />
@@ -291,7 +315,6 @@ function PlansAdminPage({ user }: Props) {
                           <p className="text-gray-500">Planos de teste são gratuitos e não permitem parcelamento.</p>
                         </div>
                       </div>
-
 
                       {!isTrialInForm && (
                         <div>
@@ -323,6 +346,7 @@ function PlansAdminPage({ user }: Props) {
                           disabled={isLoading}
                         />
                       </div>
+
                       {!isTrialInForm && (
                         <div className="col-span-2 space-y-4">
                           <div className="flex items-start">
@@ -344,33 +368,40 @@ function PlansAdminPage({ user }: Props) {
                           </div>
 
                           {allowInstallmentsInForm && (
-                            <div className="grid grid-cols-2 gap-x-6">
+                            <div className="space-y-4">
                               <div>
                                 <label htmlFor="maxInstallments" className="block text-sm font-medium text-gray-700 mb-1">Máximo de Parcelas</label>
                                 <Input
                                   id="maxInstallments"
                                   name="maxInstallments"
-                                  type="number" min="2" max="12"
-                                  placeholder="Ex: 6"
+                                  type="number" min="1" max="12"
+                                  placeholder="Ex: 2"
                                   defaultValue={editingPlan?.maxInstallments?.toString() || ''}
                                   disabled={isLoading}
                                 />
                               </div>
-                              <div>
-                                <label htmlFor="installmentPrice" className="block text-sm font-medium text-gray-700 mb-1">Preço Total Parcelado (R$) <span className="text-gray-400 font-normal">(Opcional)</span></label>
-                                <Input
-                                  id="installmentPrice"
-                                  name="installmentPrice"
-                                  type="number" step="0.01" min="0"
-                                  placeholder="Deixe vazio para sem juros"
-                                  defaultValue={editingPlan?.installmentPrice?.toString() || ''}
-                                  disabled={isLoading}
-                                />
+                              
+                              <div className="flex items-start">
+                                <div className="block text-sm font-medium text-gray-700 mb-1">
+                                  <input
+                                    id="absorbTax"
+                                    type="checkbox"
+                                    name="absorbTax"
+                                    defaultChecked={editingPlan?.absorbTax || false}
+                                    disabled={isLoading}
+                                    className="focus:ring-yellow-500 h-4 w-4 text-yellow-600 border-gray-300 rounded"
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label htmlFor="absorbTax" className="font-medium text-gray-700">Absorver taxa ou repassar taxa</label>
+                                  <p className="text-gray-500">Se marcado, a empresa absorve a taxa. Se desmarcado, a taxa é repassada ao cliente.</p>
+                                </div>
                               </div>
                             </div>
                           )}
                         </div>
                       )}
+
                       <div>
                         <label htmlFor="numberOfUsers" className="block text-sm font-medium text-gray-700 mb-1">Qtd. de usuários</label>
                         <Input
@@ -384,6 +415,7 @@ function PlansAdminPage({ user }: Props) {
                           disabled={isLoading}
                         />
                       </div>
+
                       <div className="col-span-2 flex items-start">
                         <div className="flex items-center h-5">
                           <input

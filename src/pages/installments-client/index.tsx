@@ -6,7 +6,6 @@ import { toast } from 'react-toastify'
 import { Dialog, Transition } from '@headlessui/react'
 import MainLayout from '@/layouts/MainLayout'
 import { withClientAuth } from '@/hooks/withClientAuth'
-import { PageHeader } from '@/components/shared/PageHeader'
 import { DataTable } from '@/components/shared/DataTable'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ActionButton } from '@/components/shared/ActionButton'
@@ -15,8 +14,10 @@ import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
 import { TokenPayload } from '@/utils/jwtUtils'
 import { 
-  getAllInstallments,
-  PendingInstallment 
+  getPendingPayments,
+  getDetailedPaymentSummary,
+  PendingPayment,
+  DetailedPaymentSummary 
 } from '@/services/paymentService'
 import { 
   CreditCard, 
@@ -29,39 +30,38 @@ import {
   ArrowLeft,
   Download,
   Receipt,
-  ExternalLink
+  ExternalLink,
+  Banknote
 } from 'lucide-react'
 
 interface Props {
   user: TokenPayload
 }
 
-interface InstallmentWithPayment extends PendingInstallment {
-}
-
-function ClientInstallmentsPage({ user }: Props) {
+function ClientPaymentsPage({ user }: Props) {
   const router = useRouter()
-  const [installments, setInstallments] = useState<InstallmentWithPayment[]>([])
-  const [filteredInstallments, setFilteredInstallments] = useState<InstallmentWithPayment[]>([])
+  const [payments, setPayments] = useState<PendingPayment[]>([])
+  const [filteredPayments, setFilteredPayments] = useState<PendingPayment[]>([])
+  const [paymentSummary, setPaymentSummary] = useState<DetailedPaymentSummary | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dateFilter, setDateFilter] = useState<string>('all')
 
-  // Modal de detalhes
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
-  const [selectedInstallment, setSelectedInstallment] = useState<InstallmentWithPayment | null>(null)
+  const [selectedPayment, setSelectedPayment] = useState<PendingPayment | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
 
-  // Modal de pagamento
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
-  const [selectedInstallmentForPayment, setSelectedInstallmentForPayment] = useState<InstallmentWithPayment | null>(null)
+  const [selectedPaymentForPayment, setSelectedPaymentForPayment] = useState<PendingPayment | null>(null)
 
   const statusMap: Record<string, { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
     PENDING: { label: 'Pendente', variant: 'warning' },
+    PROCESSING: { label: 'Processando', variant: 'info' },
     PAID: { label: 'Pago', variant: 'success' },
     OVERDUE: { label: 'Em Atraso', variant: 'error' },
     CANCELLED: { label: 'Cancelado', variant: 'info' },
+    REFUNDED: { label: 'Reembolsado', variant: 'info' },
   }
 
   const paymentMethodMap: Record<string, string> = {
@@ -73,9 +73,8 @@ function ClientInstallmentsPage({ user }: Props) {
   }
 
   const { currentPage, totalPages, paginatedData, goToPage, resetToFirstPage } =
-    usePagedData(filteredInstallments, 8)
+    usePagedData(filteredPayments, 8)
 
-  // Função para formatar preço
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -83,12 +82,10 @@ function ClientInstallmentsPage({ user }: Props) {
     }).format(price)
   }
 
-  // Função para formatar data
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('pt-BR')
   }
 
-  // Função para calcular dias até vencimento
   const getDaysUntilDue = (dueDate: Date) => {
     const today = new Date()
     const diffTime = dueDate.getTime() - today.getTime()
@@ -96,8 +93,7 @@ function ClientInstallmentsPage({ user }: Props) {
     return diffDays
   }
 
-  // Função para determinar urgência e cor
-  const getInstallmentInfo = (dueDate: Date, status: string) => {
+  const getPaymentInfo = (dueDate: Date, status: string) => {
     if (status === 'PAID') return { 
       type: 'paid', 
       message: 'Pago', 
@@ -111,6 +107,13 @@ function ClientInstallmentsPage({ user }: Props) {
       color: 'text-gray-600',
       bgColor: 'bg-gray-50',
       borderColor: 'border-gray-200'
+    }
+    if (status === 'PROCESSING') return { 
+      type: 'processing', 
+      message: 'Processando', 
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      borderColor: 'border-blue-200'
     }
     
     const daysUntilDue = getDaysUntilDue(dueDate)
@@ -148,31 +151,56 @@ function ClientInstallmentsPage({ user }: Props) {
 
   const columns = [
     { 
-      key: 'installmentNumber', 
-      header: 'Parcela',
-      render: (installmentNumber: number, item: InstallmentWithPayment) => (
+      key: 'planName', 
+      header: 'Plano',
+      render: (_: any, item: PendingPayment) => (
         <div>
           <div className="font-semibold text-gray-900">
-            {installmentNumber}º parcela
+            {item.clientPlan.plan.name}
           </div>
           <div className="text-sm text-gray-600">
-            {item.payment.clientPlan.plan.name}
+            {item.installments > 1 ? `${item.installments}x` : 'À vista'}
+            {item.absorbTax && (
+              <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                Taxa incluída
+              </span>
+            )}
           </div>
         </div>
       )
     },
     { 
-      key: 'amount', 
+      key: 'totalAmount', 
       header: 'Valor',
-      render: (amount: number) => (
-        <span className="font-bold text-lg text-gray-900">{formatPrice(amount)}</span>
+      render: (amount: number, item: PendingPayment) => (
+        <div>
+          <span className="font-bold text-lg text-gray-900">{formatPrice(amount)}</span>
+          {item.installments > 1 && (
+            <div className="text-sm text-gray-600">
+              {item.installments}x de {formatPrice(amount / item.installments)}
+            </div>
+          )}
+        </div>
+      )
+    },
+    { 
+      key: 'paymentMethod', 
+      header: 'Método',
+      render: (method: string) => (
+        <div className="flex items-center space-x-2">
+          {method === 'PIX' && <Banknote className="h-4 w-4 text-green-600" />}
+          {method === 'CREDIT_CARD' && <CreditCard className="h-4 w-4 text-blue-600" />}
+          <span className="text-sm text-gray-700">
+            {paymentMethodMap[method] || method}
+          </span>
+        </div>
       )
     },
     { 
       key: 'dueDate', 
       header: 'Vencimento',
-      render: (dueDate: Date, item: InstallmentWithPayment) => {
-        const info = getInstallmentInfo(dueDate, item.status)
+      render: (dueDate: Date, item: PendingPayment) => {
+        const info = getPaymentInfo(dueDate, item.status)
         return (
           <div>
             <div className="font-medium text-gray-900">{formatDate(dueDate)}</div>
@@ -195,16 +223,16 @@ function ClientInstallmentsPage({ user }: Props) {
     {
       key: 'actions',
       header: 'Ações',
-      render: (_: any, item: InstallmentWithPayment) => (
+      render: (_: any, item: PendingPayment) => (
         <div className="flex space-x-2">
           <ActionButton
             variant="view"
-            onClick={() => handleViewInstallmentDetails(item)}
+            onClick={() => handleViewPaymentDetails(item)}
             disabled={isLoading}
           />
-          {item.status === 'PENDING' && (
+          {(item.status === 'PENDING' || item.status === 'OVERDUE') && (
             <button
-              onClick={() => handlePayInstallment(item)}
+              onClick={() => handlePayPayment(item)}
               disabled={isLoading}
               className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition disabled:opacity-50"
               title="Pagar agora"
@@ -228,99 +256,96 @@ function ClientInstallmentsPage({ user }: Props) {
   ]
 
   useEffect(() => {
-    loadInstallments()
+    loadData()
   }, [])
 
   useEffect(() => {
-    filterInstallments()
-  }, [installments, searchTerm, statusFilter, dateFilter])
+    filterPayments()
+  }, [payments, searchTerm, statusFilter, dateFilter])
 
-  function filterInstallments() {
-    let filtered = [...installments]
+  function filterPayments() {
+    let filtered = [...payments]
 
-    // Filtro por termo de busca
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(installment =>
-        installment.payment.clientPlan.plan.name.toLowerCase().includes(term) ||
-        installment.installmentNumber.toString().includes(term) ||
-        formatPrice(installment.amount).toLowerCase().includes(term)
+      filtered = filtered.filter(payment =>
+        payment.clientPlan.plan.name.toLowerCase().includes(term) ||
+        formatPrice(payment.totalAmount).toLowerCase().includes(term) ||
+        paymentMethodMap[payment.paymentMethod]?.toLowerCase().includes(term)
       )
     }
 
-    // Filtro por status
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(installment => installment.status === statusFilter)
+      filtered = filtered.filter(payment => payment.status === statusFilter)
     }
 
-    // Filtro por data
     if (dateFilter !== 'all') {
       const today = new Date()
-      filtered = filtered.filter(installment => {
-        const daysUntilDue = getDaysUntilDue(installment.dueDate)
+      filtered = filtered.filter(payment => {
+        const daysUntilDue = getDaysUntilDue(payment.dueDate)
         
         switch (dateFilter) {
           case 'overdue':
-            return daysUntilDue < 0 && installment.status !== 'PAID'
+            return daysUntilDue < 0 && payment.status !== 'PAID'
           case 'thisMonth':
-            return installment.dueDate.getMonth() === today.getMonth() && 
-                   installment.dueDate.getFullYear() === today.getFullYear()
+            return payment.dueDate.getMonth() === today.getMonth() && 
+                   payment.dueDate.getFullYear() === today.getFullYear()
           case 'nextMonth':
             const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1)
-            return installment.dueDate.getMonth() === nextMonth.getMonth() && 
-                   installment.dueDate.getFullYear() === nextMonth.getFullYear()
+            return payment.dueDate.getMonth() === nextMonth.getMonth() && 
+                   payment.dueDate.getFullYear() === nextMonth.getFullYear()
           case 'paid':
-            return installment.status === 'PAID'
+            return payment.status === 'PAID'
           default:
             return true
         }
       })
     }
 
-    // Ordenar por data de vencimento (mais próximas primeiro)
     filtered.sort((a, b) => {
-      // Pendentes e em atraso primeiro
       if (a.status === 'PENDING' && b.status !== 'PENDING') return -1
       if (b.status === 'PENDING' && a.status !== 'PENDING') return 1
       if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1
       if (b.status === 'OVERDUE' && a.status !== 'OVERDUE') return 1
       
-      // Depois por data
       return a.dueDate.getTime() - b.dueDate.getTime()
     })
 
-    setFilteredInstallments(filtered)
+    setFilteredPayments(filtered)
     resetToFirstPage()
   }
 
-  async function loadInstallments() {
+  async function loadData() {
     setIsLoading(true)
     try {
-      const installmentsData = await getAllInstallments()
-      setInstallments(installmentsData)
+      const [paymentsData, summaryData] = await Promise.all([
+        getPendingPayments(),
+        getDetailedPaymentSummary()
+      ])
+      setPayments(paymentsData)
+      setPaymentSummary(summaryData)
     } catch (error) {
-      console.error('Erro ao carregar parcelas:', error)
-      toast.error('Erro ao carregar suas parcelas')
+      console.error('Erro ao carregar dados:', error)
+      toast.error('Erro ao carregar seus pagamentos')
     } finally {
       setIsLoading(false)
     }
   }
 
-  async function handleViewInstallmentDetails(installment: InstallmentWithPayment) {
+  async function handleViewPaymentDetails(payment: PendingPayment) {
     setLoadingDetails(true)
-    setSelectedInstallment(installment)
+    setSelectedPayment(payment)
     setIsDetailsModalOpen(true)
     setLoadingDetails(false)
   }
 
-  function handlePayInstallment(installment: InstallmentWithPayment) {
-    setSelectedInstallmentForPayment(installment)
+  function handlePayPayment(payment: PendingPayment) {
+    setSelectedPaymentForPayment(payment)
     setIsPaymentModalOpen(true)
   }
 
-  async function handleDownloadReceipt(installmentId: string) {
+  async function handleDownloadReceipt(paymentId: string) {
     try {
-      // Implementar download do comprovante
       toast.info('Funcionalidade de download será implementada em breve')
     } catch (error) {
       toast.error('Erro ao baixar comprovante')
@@ -328,23 +353,21 @@ function ClientInstallmentsPage({ user }: Props) {
   }
 
   function handleGoToPayment() {
-    if (selectedInstallmentForPayment) {
-      // Redirecionar para gateway de pagamento
-      toast.info('Redirecionando para pagamento...')
+    if (selectedPaymentForPayment) {
+      toast.info('Redirecionando para Mercado Pago...')
       setIsPaymentModalOpen(false)
     }
   }
 
-  // Estatísticas rápidas
   const getQuickStats = () => {
-    const total = filteredInstallments.length
-    const pending = filteredInstallments.filter(i => i.status === 'PENDING').length
-    const paid = filteredInstallments.filter(i => i.status === 'PAID').length
-    const overdue = filteredInstallments.filter(i => i.status === 'OVERDUE' || 
-      (i.status === 'PENDING' && getDaysUntilDue(i.dueDate) < 0)).length
-    const totalAmount = filteredInstallments.reduce((sum, i) => sum + i.amount, 0)
-    const paidAmount = filteredInstallments.filter(i => i.status === 'PAID').reduce((sum, i) => sum + i.amount, 0)
-    const pendingAmount = filteredInstallments.filter(i => i.status === 'PENDING').reduce((sum, i) => sum + i.amount, 0)
+    const total = filteredPayments.length
+    const pending = filteredPayments.filter(p => p.status === 'PENDING').length
+    const paid = filteredPayments.filter(p => p.status === 'PAID').length
+    const overdue = filteredPayments.filter(p => p.status === 'OVERDUE' || 
+      (p.status === 'PENDING' && getDaysUntilDue(p.dueDate) < 0)).length
+    const totalAmount = filteredPayments.reduce((sum, p) => sum + p.totalAmount, 0)
+    const paidAmount = filteredPayments.filter(p => p.status === 'PAID').reduce((sum, p) => sum + p.totalAmount, 0)
+    const pendingAmount = filteredPayments.filter(p => p.status === 'PENDING').reduce((sum, p) => sum + p.totalAmount, 0)
     
     return { total, pending, paid, overdue, totalAmount, paidAmount, pendingAmount }
   }
@@ -356,7 +379,6 @@ function ClientInstallmentsPage({ user }: Props) {
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-6 max-w-7xl">
           
-          {/* Header da página */}
           <div className="mb-6">
             <div className="flex items-center mb-4">
               <button
@@ -366,18 +388,17 @@ function ClientInstallmentsPage({ user }: Props) {
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Minhas Parcelas</h1>
-                <p className="text-gray-600 mt-1">Acompanhe todas as suas parcelas e pagamentos</p>
+                <h1 className="text-2xl font-bold text-gray-900">Meus Pagamentos</h1>
+                <p className="text-gray-600 mt-1">Acompanhe todos os seus pagamentos e assinaturas</p>
               </div>
             </div>
           </div>
 
-          {/* Cards de estatísticas */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
             <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="text-center">
                 <div className="h-8 w-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                  <CreditCard className="h-4 w-4 text-blue-600" />
+                  <Receipt className="h-4 w-4 text-blue-600" />
                 </div>
                 <p className="text-sm text-gray-600">Total</p>
                 <p className="text-xl font-bold text-gray-900">{stats.total}</p>
@@ -399,7 +420,7 @@ function ClientInstallmentsPage({ user }: Props) {
                 <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
                   <CheckCircle className="h-4 w-4 text-green-600" />
                 </div>
-                <p className="text-sm text-gray-600">Pagas</p>
+                <p className="text-sm text-gray-600">Pagos</p>
                 <p className="text-xl font-bold text-green-600">{stats.paid}</p>
               </div>
             </div>
@@ -435,7 +456,6 @@ function ClientInstallmentsPage({ user }: Props) {
             </div>
           </div>
 
-          {/* Filtros */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
@@ -443,21 +463,19 @@ function ClientInstallmentsPage({ user }: Props) {
 
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Busca */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
                   <Input
                     id="search"
                     name="search"
                     type="text"
-                    placeholder="Plano, parcela, valor..."
+                    placeholder="Plano, valor, método..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     disabled={isLoading}
                   />
                 </div>
 
-                {/* Filtro por Status */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                   <select
@@ -468,13 +486,13 @@ function ClientInstallmentsPage({ user }: Props) {
                   >
                     <option value="all">Todos os status</option>
                     <option value="PENDING">Pendente</option>
+                    <option value="PROCESSING">Processando</option>
                     <option value="PAID">Pago</option>
                     <option value="OVERDUE">Em Atraso</option>
                     <option value="CANCELLED">Cancelado</option>
                   </select>
                 </div>
 
-                {/* Filtro por Período */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Período</label>
                   <select
@@ -487,21 +505,20 @@ function ClientInstallmentsPage({ user }: Props) {
                     <option value="overdue">Em atraso</option>
                     <option value="thisMonth">Este mês</option>
                     <option value="nextMonth">Próximo mês</option>
-                    <option value="paid">Já pagas</option>
+                    <option value="paid">Já pagos</option>
                   </select>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Lista de Parcelas */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Suas Parcelas</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Seus Pagamentos</h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {filteredInstallments.length} de {installments.length} parcelas
+                    {filteredPayments.length} de {payments.length} pagamentos
                   </p>
                 </div>
               </div>
@@ -516,12 +533,11 @@ function ClientInstallmentsPage({ user }: Props) {
                 itemsPerPage={8}
                 onPageChange={goToPage}
                 isLoading={isLoading}
-                emptyStateTitle="Nenhuma parcela encontrada."
+                emptyStateTitle="Nenhum pagamento encontrado."
               />
             </div>
           </div>
 
-          {/* Modal de Detalhes da Parcela */}
           <Transition appear show={isDetailsModalOpen} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={() => !loadingDetails && setIsDetailsModalOpen(false)}>
               <Transition.Child as={Fragment}
@@ -540,7 +556,7 @@ function ClientInstallmentsPage({ user }: Props) {
                     <Dialog.Panel className="w-full max-w-2xl bg-white rounded-lg shadow-xl overflow-hidden">
                       <div className="px-6 py-4 border-b border-gray-200">
                         <Dialog.Title className="text-lg font-semibold text-gray-900">
-                          Detalhes da Parcela
+                          Detalhes do Pagamento
                         </Dialog.Title>
                       </div>
 
@@ -549,20 +565,48 @@ function ClientInstallmentsPage({ user }: Props) {
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 mx-auto"></div>
                           <p className="mt-2 text-gray-600">Carregando detalhes...</p>
                         </div>
-                      ) : selectedInstallment ? (
+                      ) : selectedPayment ? (
                         <div className="p-6 space-y-6">
-                          {/* Header da Parcela */}
                           <div className="text-center bg-gray-50 rounded-lg p-6">
                             <div className="flex items-center justify-center space-x-3 mb-3">
                               <h2 className="text-2xl font-bold text-gray-900">
-                                {selectedInstallment.installmentNumber}º Parcela
+                                {selectedPayment.clientPlan.plan.name}
                               </h2>
-                              <StatusBadge variant={statusMap[selectedInstallment.status]?.variant || 'info'}>
-                                {statusMap[selectedInstallment.status]?.label || selectedInstallment.status}
+                              <StatusBadge variant={statusMap[selectedPayment.status]?.variant || 'info'}>
+                                {statusMap[selectedPayment.status]?.label || selectedPayment.status}
                               </StatusBadge>
                             </div>
+                            <div className="text-3xl font-bold text-green-600 mb-2">
+                              {formatPrice(selectedPayment.totalAmount)}
+                            </div>
+                            {selectedPayment.installments > 1 && (
+                              <p className="text-sm text-gray-600">
+                                {selectedPayment.installments}x de {formatPrice(selectedPayment.totalAmount / selectedPayment.installments)}
+                              </p>
+                            )}
                           </div>
-                          {/* Informações de Suporte */}
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-sm font-medium text-gray-700">Método de Pagamento</label>
+                              <p className="text-gray-900">{paymentMethodMap[selectedPayment.paymentMethod]}</p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-gray-700">Data de Vencimento</label>
+                              <p className="text-gray-900">{formatDate(selectedPayment.dueDate)}</p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-gray-700">Criado em</label>
+                              <p className="text-gray-900">{formatDate(selectedPayment.createdAt)}</p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-gray-700">Taxa</label>
+                              <p className="text-gray-900">
+                                {selectedPayment.absorbTax ? 'Incluída no preço' : 'Adicionada no checkout'}
+                              </p>
+                            </div>
+                          </div>
+
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div className="flex items-start">
                               <div className="flex-shrink-0">
@@ -571,14 +615,29 @@ function ClientInstallmentsPage({ user }: Props) {
                                 </svg>
                               </div>
                               <div className="ml-3">
-                                <p className="text-sm text-blue-700 mt-1">
-                                  A implementar...
+                                <p className="text-sm text-blue-700">
+                                  {selectedPayment.status === 'PENDING' && 'Aguardando confirmação do pagamento.'}
+                                  {selectedPayment.status === 'PROCESSING' && 'Pagamento sendo processado pelo Mercado Pago.'}
+                                  {selectedPayment.status === 'PAID' && 'Pagamento confirmado! Seu plano está ativo.'}
+                                  {selectedPayment.status === 'OVERDUE' && 'Pagamento em atraso. Clique em "Pagar" para regularizar.'}
                                 </p>
                               </div>
                             </div>
                           </div>
                         </div>
                       ) : null}
+
+                      <div className="px-6 py-4 border-t border-gray-200">
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            onClick={() => setIsDetailsModalOpen(false)}
+                            variant="neutral"
+                          >
+                            Fechar
+                          </Button>
+                        </div>
+                      </div>
                     </Dialog.Panel>
                   </Transition.Child>
                 </div>
@@ -586,14 +645,13 @@ function ClientInstallmentsPage({ user }: Props) {
             </Dialog>
           </Transition>
 
-          {/* Modal de Pagamento */}
           <Transition appear show={isPaymentModalOpen} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={() => setIsPaymentModalOpen(false)}>
               <Transition.Child as={Fragment}
                 enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
                 leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
               >
-                <div className="fixed inset-0 bg-black/25 " />
+                <div className="fixed inset-0 bg-black/25" />
               </Transition.Child>
 
               <div className="fixed inset-0 overflow-y-auto">
@@ -605,76 +663,64 @@ function ClientInstallmentsPage({ user }: Props) {
                     <Dialog.Panel className="w-full max-w-lg bg-white rounded-lg shadow-xl overflow-hidden">
                       <div className="px-6 py-4 border-b border-gray-200">
                         <Dialog.Title className="text-lg font-semibold text-gray-900">
-                          Pagar Parcela
+                          Pagar Assinatura
                         </Dialog.Title>
                       </div>
 
-                      {selectedInstallmentForPayment && (
+                      {selectedPaymentForPayment && (
                         <div className="p-6">
-                          {/* Informações da Parcela */}
                           <div className="bg-gray-50 rounded-lg p-4 mb-6">
                             <div className="text-center">
                               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                {selectedInstallmentForPayment.installmentNumber}º Parcela
+                                {selectedPaymentForPayment.clientPlan.plan.name}
                               </h3>
-                              <p className="text-sm text-gray-600 mb-3">
-                                {selectedInstallmentForPayment.payment.clientPlan.plan.name}
-                              </p>
                               <div className="text-3xl font-bold text-green-600 mb-2">
-                                {formatPrice(selectedInstallmentForPayment.amount)}
+                                {formatPrice(selectedPaymentForPayment.totalAmount)}
                               </div>
+                              {selectedPaymentForPayment.installments > 1 && (
+                                <div className="text-sm text-gray-600 mb-2">
+                                  {selectedPaymentForPayment.installments}x de {formatPrice(selectedPaymentForPayment.totalAmount / selectedPaymentForPayment.installments)}
+                                </div>
+                              )}
                               <div className="text-sm text-gray-600">
-                                Vencimento: {formatDate(selectedInstallmentForPayment.dueDate)}
+                                Vencimento: {formatDate(selectedPaymentForPayment.dueDate)}
                               </div>
-                              {getDaysUntilDue(selectedInstallmentForPayment.dueDate) < 0 && (
+                              {getDaysUntilDue(selectedPaymentForPayment.dueDate) < 0 && (
                                 <div className="text-sm text-red-600 mt-1">
-                                  {Math.abs(getDaysUntilDue(selectedInstallmentForPayment.dueDate))} dias em atraso
+                                  {Math.abs(getDaysUntilDue(selectedPaymentForPayment.dueDate))} dias em atraso
+                                </div>
+                              )}
+                              {!selectedPaymentForPayment.absorbTax && (
+                                <div className="text-xs text-orange-600 mt-2">
+                                  * Taxa do Mercado Pago será adicionada
                                 </div>
                               )}
                             </div>
                           </div>
 
-                          {/* Métodos de Pagamento */}
                           <div className="space-y-3 mb-6">
-                            <h4 className="font-medium text-gray-900">Escolha a forma de pagamento:</h4>
+                            <h4 className="font-medium text-gray-900">Será redirecionado para:</h4>
                             
-                            <button
-                              onClick={handleGoToPayment}
-                              className="w-full p-4 border-2 border-green-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition group"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
-                                    <span className="text-green-600 font-bold">PIX</span>
-                                  </div>
-                                  <div className="text-left">
-                                    <div className="font-medium text-gray-900">PIX</div>
-                                    <div className="text-sm text-gray-600"></div>
-                                  </div>
-                                </div>
-                                <ExternalLink className="h-5 w-5 text-gray-400 group-hover:text-green-600" />
-                              </div>
-                            </button>
-
-                            <button
-                              onClick={handleGoToPayment}
-                              className="w-full p-4 border-2 border-blue-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition group"
-                            >
+                            <div className="p-4 border-2 border-blue-200 rounded-lg bg-blue-50">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
                                   <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
                                     <CreditCard className="h-5 w-5 text-blue-600" />
                                   </div>
                                   <div className="text-left">
-                                    <div className="font-medium text-gray-900">Cartão de Crédito</div>
-                                    <div className="text-sm text-gray-600"></div>
+                                    <div className="font-medium text-gray-900">Mercado Pago</div>
+                                    <div className="text-sm text-gray-600">
+                                      {selectedPaymentForPayment.paymentMethod === 'PIX' ? 'Pagamento via PIX' : 
+                                       selectedPaymentForPayment.paymentMethod === 'CREDIT_CARD' ? 'Cartão de Crédito' :
+                                       paymentMethodMap[selectedPaymentForPayment.paymentMethod]}
+                                    </div>
                                   </div>
                                 </div>
-                                <ExternalLink className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+                                <ExternalLink className="h-5 w-5 text-blue-600" />
                               </div>
-                            </button>
+                            </div>
                           </div>
-                          {/* Botões */}
+
                           <div className="flex space-x-3">
                             <Button
                               type="button"
@@ -683,6 +729,14 @@ function ClientInstallmentsPage({ user }: Props) {
                               className="flex-1"
                             >
                               Cancelar
+                            </Button>
+                            <Button
+                              type="button"
+                              onClick={handleGoToPayment}
+                              variant="primary"
+                              className="flex-1"
+                            >
+                              Ir para Pagamento
                             </Button>
                           </div>
                         </div>
@@ -700,4 +754,4 @@ function ClientInstallmentsPage({ user }: Props) {
   )
 }
 
-export default withClientAuth(ClientInstallmentsPage)
+export default withClientAuth(ClientPaymentsPage)

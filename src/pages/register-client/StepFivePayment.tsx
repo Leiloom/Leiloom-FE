@@ -2,12 +2,10 @@
 
 import { useRegisterClient } from '@/contexts/RegisterClientContext'
 import { loginClient } from '@/services/authService'
-import { acceptTerms, getCurrentTerms } from '@/services/termsService'
 import { createSubscriptionOnly } from '@/services/paymentService'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { updateClientUser, updateClient } from '@/services/clientService'
 import { useAuthContext } from '@/contexts/AuthContext'
 import { PaymentMethod } from '@/types/payment'
 import { Plan } from '@/types/plan'
@@ -27,7 +25,6 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('CREDIT_CARD')
     const { login } = useAuthContext()
 
-    // ✅ CORREÇÃO: Verificação de segurança para evitar erro de SSR
     if (!selectedPlan) {
         return (
             <div className="space-y-6">
@@ -55,26 +52,8 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
         }).format(price)
     }
 
-    function calculateTotalPrice(plan: Plan, installments: number): number {
-        if (!plan) return 0
-
-        // Se é à vista (1x), sempre usa o preço normal
-        if (installments === 1) {
-            return plan.price
-        }
-
-        // Se é parcelado E tem installmentPrice definido, usa ele (com juros)
-        if (installments > 1 && plan.installmentPrice) {
-            return plan.installmentPrice
-        }
-
-        // Se é parcelado mas sem installmentPrice, usa preço normal (sem juros)
-        return plan.price
-    }
-
     function calculateInstallmentValue(plan: Plan, installments: number): number {
-        const totalPrice = calculateTotalPrice(plan, installments)
-        return totalPrice / installments
+        return plan.price / installments
     }
 
     function getInstallmentOptions(plan: Plan): number[] {
@@ -83,24 +62,11 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
         return Array.from({ length: maxInstallments }, (_, i) => i + 1)
     }
 
-    function hasInterest(plan: Plan, installments: number): boolean {
-        if (installments === 1) return false
-        return typeof plan.installmentPrice === 'number' && plan.installmentPrice > plan.price
-    }
-
-    function getInterestRate(plan: Plan): number {
-        if (!plan.installmentPrice || plan.installmentPrice <= plan.price) return 0
-        return ((plan.installmentPrice - plan.price) / plan.price) * 100
-    }
-
     async function handlePaymentSubmit() {
         setLoading(true)
-
         try {
             await new Promise(resolve => setTimeout(resolve, 2000))
-
             setCurrentStep(4)
-
             setTimeout(async () => {
                 await handleCreateSubscription()
             }, 2000)
@@ -112,8 +78,6 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
 
     async function handleCreateSubscription() {
         try {
-            // ✅ OTIMIZADO: Removidas operações redundantes feitas no Step 3
-            // Faz login
             const token = await loginClient({
                 login: formData.email,
                 password: formData.password,
@@ -122,9 +86,8 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
 
             login(token, 'CLIENT')
 
-            // Cria assinatura paga
             const subscriptionData = await createSubscriptionOnly({
-                planId: selectedPlan.id,
+                planId: selectedPlan.id??'',
                 installments: selectedInstallments,
                 paymentMethod: selectedPaymentMethod
             })
@@ -138,7 +101,6 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
         }
     }
 
-    // Step 1: Seleção de parcelamento
     const renderStep1 = () => (
         <div className="space-y-6">
             <div className="text-center">
@@ -156,20 +118,22 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                     {selectedPlan.description}
                 </p>
                 <div className="text-sm text-yellow-700">
-                    <strong>Preço à vista:</strong> {formatPrice(selectedPlan.price)}
-                    {selectedPlan.installmentPrice && selectedPlan.installmentPrice > selectedPlan.price && (
-                        <>
-                            <br />
-                            <strong>Preço parcelado:</strong> {formatPrice(selectedPlan.installmentPrice)}
-                            <span className="text-yellow-600"> (+{getInterestRate(selectedPlan).toFixed(1)}% juros)</span>
-                        </>
+                    <strong>Preço:</strong> {formatPrice(selectedPlan.price)}
+                    {selectedPlan.absorbTax && selectedPlan.allowInstallments && (
+                        <p className="text-xs mt-1 text-yellow-600">
+                            Taxa do Mercado Pago já incluída no preço
+                        </p>
+                    )}
+                    {!selectedPlan.absorbTax && selectedPlan.allowInstallments && (
+                        <p className="text-xs mt-1 text-yellow-600">
+                            Taxa do Mercado Pago será adicionada no checkout
+                        </p>
                     )}
                 </div>
             </div>
 
             {selectedPlan.allowInstallments ? (
                 <div className="space-y-4">
-
                     <div>
                         <label htmlFor="installments" className="block text-sm font-medium text-gray-700 mb-1">
                             Selecione o número de parcelas:
@@ -190,21 +154,18 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                                 </option>
                             ))}
                         </select>
-
                     </div>
-
 
                     {selectedInstallments > 1 && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                             <div className="text-sm text-blue-700">
                                 <strong>Resumo do parcelamento:</strong>
                                 <br />
-                                {selectedInstallments}x de {formatPrice(calculateInstallmentValue(selectedPlan, selectedInstallments))} = {formatPrice(calculateTotalPrice(selectedPlan, selectedInstallments))}
-                                {hasInterest(selectedPlan, selectedInstallments) && (
-                                    <span className="text-orange-600">
-                                        <br />
-                                        <strong>Economia à vista:</strong> {formatPrice(calculateTotalPrice(selectedPlan, selectedInstallments) - selectedPlan.price)}
-                                    </span>
+                                {selectedInstallments}x de {formatPrice(calculateInstallmentValue(selectedPlan, selectedInstallments))} = {formatPrice(selectedPlan.price)}
+                                {!selectedPlan.absorbTax && (
+                                    <p className="text-orange-600 text-xs mt-1">
+                                        * Taxa do Mercado Pago será adicionada no pagamento
+                                    </p>
                                 )}
                             </div>
                         </div>
@@ -216,6 +177,11 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                         {formatPrice(selectedPlan.price)}
                     </div>
                     <p className="text-gray-600 mt-2">Pagamento único</p>
+                    {!selectedPlan.absorbTax && (
+                        <p className="text-orange-600 text-xs mt-1">
+                            * Taxa do Mercado Pago será adicionada no pagamento
+                        </p>
+                    )}
                 </div>
             )}
 
@@ -236,9 +202,7 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
         </div>
     )
 
-    // Step 2: Método de pagamento
     const renderStep2 = () => {
-        const totalPrice = calculateTotalPrice(selectedPlan, selectedInstallments)
         const installmentValue = calculateInstallmentValue(selectedPlan, selectedInstallments)
 
         return (
@@ -258,16 +222,21 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                             {selectedInstallments === 1 ? 'À vista:' : `${selectedInstallments}x de:`}
                         </span>
                         <span className="font-bold text-xl text-black">
-                            {selectedInstallments === 1 ? formatPrice(totalPrice) : formatPrice(installmentValue)}
+                            {selectedInstallments === 1 ? formatPrice(selectedPlan.price) : formatPrice(installmentValue)}
                         </span>
                     </div>
                     {selectedInstallments > 1 && (
                         <div className="flex items-center justify-between text-sm mt-2">
                             <span className="text-gray-600">Total:</span>
                             <span className="font-medium text-black">
-                                {formatPrice(totalPrice)}
+                                {formatPrice(selectedPlan.price)}
                             </span>
                         </div>
+                    )}
+                    {!selectedPlan.absorbTax && (
+                        <p className="text-xs text-orange-600 mt-2">
+                            * Taxa do Mercado Pago será calculada no checkout
+                        </p>
                     )}
                 </div>
 
@@ -289,7 +258,9 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                                 <CreditCard className="h-6 w-6 text-gray-600" />
                                 <div>
                                     <p className="font-medium text-gray-900">Cartão de Crédito</p>
-                                    <p className="text-sm text-gray-600">Cobrança recorrente automática</p>
+                                    <p className="text-sm text-gray-600">
+                                        {selectedInstallments > 1 ? 'Parcelamento no cartão' : 'Pagamento único'}
+                                    </p>
                                 </div>
                             </div>
                         </button>
@@ -306,7 +277,9 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                                 <DollarSign className="h-6 w-6 text-gray-600" />
                                 <div>
                                     <p className="font-medium text-gray-900">PIX</p>
-                                    <p className="text-sm text-gray-600">Pagamento via PIX (renovação manual)</p>
+                                    <p className="text-sm text-gray-600">
+                                        {selectedInstallments > 1 ? 'Será gerado um PIX por parcela' : 'Pagamento instantâneo'}
+                                    </p>
                                 </div>
                             </div>
                         </button>
@@ -331,9 +304,7 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
         )
     }
 
-    // Step 3: Dados do pagamento
     const renderStep3 = () => {
-        const totalPrice = calculateTotalPrice(selectedPlan, selectedInstallments)
         const installmentValue = calculateInstallmentValue(selectedPlan, selectedInstallments)
 
         return (
@@ -344,8 +315,8 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                     </h2>
                     <p className="text-gray-600">
                         {selectedPaymentMethod === 'CREDIT_CARD'
-                            ? 'Insira os dados do seu cartão de crédito'
-                            : 'Escaneie o QR Code ou copie o código PIX'
+                            ? 'Seus dados serão processados pelo Mercado Pago'
+                            : 'Você será redirecionado para o Mercado Pago'
                         }
                     </p>
                 </div>
@@ -401,23 +372,19 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                     <div className="text-center space-y-4">
                         <div className="bg-gray-100 rounded-lg p-8">
                             <div className="w-48 h-48 bg-white border-2 border-dashed border-gray-300 rounded-lg mx-auto flex items-center justify-center">
-                                <p className="text-gray-500">QR Code PIX</p>
+                                <p className="text-gray-500">Você será redirecionado</p>
                             </div>
                         </div>
 
-                        <div className="bg-gray-50 rounded-lg p-4">
-                            <p className="text-sm text-gray-600 mb-2">Código PIX:</p>
-                            <p className="font-mono text-sm bg-white p-2 rounded border break-all">
-                                00020126580014BR.GOV.BCB.PIX0136123e4567-e12b-12d1-a456-426614174000...
-                            </p>
-                            <button className="mt-2 text-yellow-600 hover:text-yellow-700 text-sm font-medium">
-                                Copiar código
-                            </button>
-                        </div>
-
                         <p className="text-sm text-gray-600">
-                            Valor: <strong>{selectedInstallments === 1 ? formatPrice(totalPrice) : formatPrice(installmentValue)}</strong>
+                            Valor: <strong>{selectedInstallments === 1 ? formatPrice(selectedPlan.price) : formatPrice(installmentValue)}</strong>
                         </p>
+                        
+                        {selectedInstallments > 1 && (
+                            <p className="text-xs text-blue-600">
+                                ℹ️ Será gerado um pagamento PIX por parcela
+                            </p>
+                        )}
                     </div>
                 )}
 
@@ -436,14 +403,13 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                             : 'bg-yellow-400 text-black hover:bg-yellow-300'
                             }`}
                     >
-                        {loading ? 'Processando...' : selectedPaymentMethod === 'CREDIT_CARD' ? 'Confirmar Pagamento' : 'Confirmar PIX'}
+                        {loading ? 'Processando...' : 'Finalizar Pagamento'}
                     </button>
                 </div>
             </div>
         )
     }
 
-    // Step 4: Sucesso
     const renderStep4 = () => (
         <div className="text-center space-y-6">
             <div className="flex justify-center">
@@ -452,19 +418,19 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
 
             <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    Pagamento Confirmado!
+                    Pagamento Criado!
                 </h2>
                 <p className="text-gray-600">
-                    Seu plano foi ativado com sucesso. Redirecionando para o dashboard...
+                    Seu pagamento foi registrado. Aguardando confirmação do Mercado Pago...
                 </p>
             </div>
 
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <h3 className="font-semibold text-green-800 mb-2">
-                    {selectedPlan.name} - Ativo
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-800 mb-2">
+                    {selectedPlan.name}
                 </h3>
-                <p className="text-sm text-green-700">
-                    Próximo vencimento: {new Date(Date.now() + selectedPlan.durationDays * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}
+                <p className="text-sm text-blue-700">
+                    Plano será ativado após confirmação do pagamento
                 </p>
             </div>
 

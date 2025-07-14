@@ -1,4 +1,3 @@
-// services/clientDashboardService.ts
 import { api } from './api'
 import { handleAuthError } from './authService'
 import { getDetailedPaymentSummary, DetailedPaymentSummary } from './paymentService'
@@ -30,24 +29,17 @@ export interface ClientDashboardData {
   accountStatus: 'ACTIVE' | 'PENDING' | 'EXPIRED' | 'INACTIVE'
 }
 
-/**
- * Busca dados completos do dashboard do cliente
- */
 export async function getClientDashboardData(): Promise<ClientDashboardData> {
   try {
-    // Busca plano atual do cliente
     const currentPlanResponse = await api.get('/client-plans/current')
     const currentPlan = currentPlanResponse.data
 
-    // Busca período atual
     const currentPeriodResponse = await api.get('/client-period-plans/current')
     const currentPeriod = currentPeriodResponse.data
 
-    // Busca histórico de planos
     const planHistoryResponse = await api.get('/client-plans/history')
     const planHistory = planHistoryResponse.data
 
-    // Busca resumo de pagamentos
     let paymentSummary = null
     try {
       paymentSummary = await getDetailedPaymentSummary()
@@ -55,7 +47,6 @@ export async function getClientDashboardData(): Promise<ClientDashboardData> {
       console.warn('Erro ao buscar resumo de pagamentos:', error)
     }
 
-    // Processa dados do plano atual
     const processedCurrentPlan = currentPlan ? {
       id: currentPlan.id,
       name: currentPlan.plan.name,
@@ -64,7 +55,6 @@ export async function getClientDashboardData(): Promise<ClientDashboardData> {
       isTrial: currentPlan.plan.isTrial
     } : null
 
-    // Processa dados do período atual
     const processedCurrentPeriod = currentPeriod ? {
       id: currentPeriod.id,
       startsAt: new Date(currentPeriod.startsAt),
@@ -75,7 +65,6 @@ export async function getClientDashboardData(): Promise<ClientDashboardData> {
       isCurrent: currentPeriod.isCurrent
     } : null
 
-    // Processa histórico
     const processedPlanHistory = planHistory.map((item: any) => ({
       planName: item.plan.name,
       startDate: new Date(item.createdOn),
@@ -83,7 +72,6 @@ export async function getClientDashboardData(): Promise<ClientDashboardData> {
       wasActive: item.current
     }))
 
-    // Determina status da conta
     const accountStatus = determineAccountStatus(processedCurrentPlan, processedCurrentPeriod)
 
     return {
@@ -98,9 +86,6 @@ export async function getClientDashboardData(): Promise<ClientDashboardData> {
   }
 }
 
-/**
- * Busca apenas o plano atual do cliente
- */
 export async function getCurrentClientPlan() {
   try {
     const response = await api.get('/client-plans/current')
@@ -124,9 +109,6 @@ export async function getCurrentClientPlan() {
   }
 }
 
-/**
- * Busca apenas o período atual do cliente
- */
 export async function getCurrentClientPeriod() {
   try {
     const response = await api.get('/client-period-plans/current')
@@ -148,9 +130,6 @@ export async function getCurrentClientPeriod() {
   }
 }
 
-/**
- * Busca histórico completo de planos do cliente
- */
 export async function getClientPlanHistory() {
   try {
     const response = await api.get('/client-plans/history')
@@ -179,9 +158,6 @@ export async function getClientPlanHistory() {
   }
 }
 
-/**
- * Calcula dias restantes até a expiração
- */
 function calculateDaysRemaining(expirationDate: Date): number {
   const now = new Date()
   const diffTime = expirationDate.getTime() - now.getTime()
@@ -189,9 +165,6 @@ function calculateDaysRemaining(expirationDate: Date): number {
   return Math.max(0, diffDays)
 }
 
-/**
- * Determina o status da conta baseado no plano e período
- */
 function determineAccountStatus(
   currentPlan: any, 
   currentPeriod: any
@@ -211,9 +184,6 @@ function determineAccountStatus(
   return 'ACTIVE'
 }
 
-/**
- * Renova o período atual do cliente
- */
 export async function renewCurrentPeriod() {
   try {
     const response = await api.post('/client-period-plans/renew')
@@ -227,9 +197,6 @@ export async function renewCurrentPeriod() {
   }
 }
 
-/**
- * Confirma o período atual (para períodos não-trial)
- */
 export async function confirmCurrentPeriod() {
   try {
     const currentPeriod = await getCurrentClientPeriod()
@@ -251,9 +218,6 @@ export async function confirmCurrentPeriod() {
   }
 }
 
-/**
- * Busca estatísticas simples do cliente
- */
 export async function getClientStats() {
   try {
     const dashboardData = await getClientDashboardData()
@@ -265,7 +229,7 @@ export async function getClientStats() {
       totalPlansUsed: dashboardData.planHistory.length,
       accountStatus: dashboardData.accountStatus,
       needsPaymentAttention: (dashboardData.paymentSummary?.overdueAmount ?? 0) > 0,
-      upcomingPaymentAmount: dashboardData.paymentSummary?.nextInstallmentAmount || 0,
+      upcomingPaymentAmount: dashboardData.paymentSummary?.nextPaymentAmount || 0,
       nextPaymentDate: dashboardData.paymentSummary?.nextDueDate || null
     }
   } catch (error: any) {
@@ -273,9 +237,6 @@ export async function getClientStats() {
   }
 }
 
-/**
- * Verifica se o cliente pode acessar funcionalidades premium
- */
 export async function checkPremiumAccess(): Promise<boolean> {
   try {
     const stats = await getClientStats()
@@ -288,15 +249,11 @@ export async function checkPremiumAccess(): Promise<boolean> {
   }
 }
 
-/**
- * Busca alertas importantes para o dashboard
- */
 export async function getDashboardAlerts() {
   try {
     const dashboardData = await getClientDashboardData()
     const alerts = []
 
-    // Alerta de expiração próxima
     if (dashboardData.currentPeriod && dashboardData.currentPeriod.daysRemaining <= 7) {
       alerts.push({
         type: 'warning' as const,
@@ -307,7 +264,6 @@ export async function getDashboardAlerts() {
       })
     }
 
-    // Alerta de pagamento pendente
     if (dashboardData.paymentSummary && dashboardData.paymentSummary.overdueAmount > 0) {
       alerts.push({
         type: 'error' as const,
@@ -318,7 +274,6 @@ export async function getDashboardAlerts() {
       })
     }
 
-    // Alerta de período não confirmado
     if (dashboardData.currentPeriod && 
         !dashboardData.currentPeriod.wasConfirmed && 
         !dashboardData.currentPeriod.isTrial) {
@@ -331,23 +286,21 @@ export async function getDashboardAlerts() {
       })
     }
 
-    // Alerta de próximo pagamento
     if (dashboardData.paymentSummary && 
         dashboardData.paymentSummary.nextDueDate && 
-        dashboardData.paymentSummary.nextInstallmentAmount > 0) {
+        dashboardData.paymentSummary.nextPaymentAmount > 0) {
       const daysUntilPayment = calculateDaysRemaining(dashboardData.paymentSummary.nextDueDate)
       if (daysUntilPayment <= 3) {
         alerts.push({
           type: 'warning' as const,
           title: 'Próximo pagamento',
-          message: `Pagamento de R$ ${dashboardData.paymentSummary.nextInstallmentAmount.toFixed(2)} vence em ${daysUntilPayment} dias.`,
+          message: `Pagamento de R$ ${dashboardData.paymentSummary.nextPaymentAmount.toFixed(2)} vence em ${daysUntilPayment} dias.`,
           action: 'view-payment',
           priority: 2
         })
       }
     }
 
-    // Ordena por prioridade (0 = mais importante)
     return alerts.sort((a, b) => a.priority - b.priority)
   } catch (error: any) {
     console.error('Erro ao buscar alertas:', error)

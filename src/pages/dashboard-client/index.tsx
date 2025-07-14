@@ -6,7 +6,7 @@ import MainLayout from '@/layouts/MainLayout'
 import { withClientAuth } from '@/hooks/withClientAuth'
 import { TokenPayload } from '@/utils/jwtUtils'
 import { getClientDashboardData, ClientDashboardData } from '@/services/clientDashboardService'
-import { getDetailedPaymentSummary, DetailedPaymentSummary, getPendingInstallments, PendingInstallment } from '@/services/paymentService'
+import { getDetailedPaymentSummary, DetailedPaymentSummary, getPendingPayments, PendingPayment } from '@/services/paymentService'
 import { toast } from 'react-toastify'
 import { CreditCard, AlertTriangle, CheckCircle, Clock, DollarSign } from 'lucide-react'
 
@@ -19,16 +19,14 @@ function DashboardClient({ user }: Props) {
   const searchParams = useSearchParams()
   const [dashboardData, setDashboardData] = useState<ClientDashboardData | null>(null)
   const [paymentSummary, setPaymentSummary] = useState<DetailedPaymentSummary | null>(null)
-  const [pendingInstallments, setPendingInstallments] = useState<PendingInstallment[]>([])
+  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([])
   const [loading, setLoading] = useState(true)
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(false)
 
-  // Carrega dados do dashboard
   useEffect(() => {
     loadAllData()
   }, [])
 
-  // Verifica se é nova assinatura
   useEffect(() => {
     const newSubscription = searchParams?.get('newSubscription')
     if (newSubscription) {
@@ -42,11 +40,10 @@ function DashboardClient({ user }: Props) {
     try {
       setLoading(true)
 
-      // Carrega dados em paralelo
-      const [dashboardResult, paymentResult, installmentsResult] = await Promise.allSettled([
+      const [dashboardResult, paymentResult, paymentsResult] = await Promise.allSettled([
         getClientDashboardData(),
         getDetailedPaymentSummary(),
-        getPendingInstallments()
+        getPendingPayments()
       ])
 
       if (dashboardResult.status === 'fulfilled') {
@@ -61,10 +58,10 @@ function DashboardClient({ user }: Props) {
         console.error('Erro ao carregar resumo de pagamentos:', paymentResult.reason)
       }
 
-      if (installmentsResult.status === 'fulfilled') {
-        setPendingInstallments(installmentsResult.value)
+      if (paymentsResult.status === 'fulfilled') {
+        setPendingPayments(paymentsResult.value)
       } else {
-        console.error('Erro ao carregar parcelas pendentes:', installmentsResult.reason)
+        console.error('Erro ao carregar pagamentos pendentes:', paymentsResult.reason)
       }
 
     } catch (error: any) {
@@ -75,12 +72,10 @@ function DashboardClient({ user }: Props) {
     }
   }
 
-  // Função para verificar se é trial
   const isTrialUser = () => {
     return paymentSummary?.currentPlan?.period?.isTrial || false
   }
 
-  // Função para formatar preço
   const formatPrice = (price: number) => {
     if (price === 0) return 'Grátis'
     return new Intl.NumberFormat('pt-BR', {
@@ -89,12 +84,10 @@ function DashboardClient({ user }: Props) {
     }).format(price)
   }
 
-  // Função para formatar data
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('pt-BR')
   }
 
-  // Função para calcular dias até vencimento
   const getDaysUntilDue = (dueDate: Date) => {
     const today = new Date()
     const diffTime = dueDate.getTime() - today.getTime()
@@ -102,11 +95,9 @@ function DashboardClient({ user }: Props) {
     return diffDays
   }
 
-  // Lógica do próximo vencimento (trial vs pagamento)
   const getNextDueInfo = () => {
     if (loading) return { type: 'loading' }
 
-    // Se é trial, mostra expiração do trial
     if (isTrialUser() && paymentSummary?.currentPlan?.period?.expiresAt) {
       const trialExpiresAt = paymentSummary.currentPlan.period.expiresAt
       const daysUntilExpiration = getDaysUntilDue(trialExpiresAt)
@@ -119,7 +110,6 @@ function DashboardClient({ user }: Props) {
       }
     }
 
-    // Se não é trial e tem próximo vencimento
     if (paymentSummary?.nextDueDate) {
       const daysUntilDue = getDaysUntilDue(paymentSummary.nextDueDate)
 
@@ -127,20 +117,18 @@ function DashboardClient({ user }: Props) {
         type: 'payment',
         days: daysUntilDue,
         date: paymentSummary.nextDueDate,
-        message: 'Próxima parcela em'
+        message: 'Próximo pagamento em'
       }
     }
 
-    // Não tem vencimentos
     return { type: 'none' }
   }
 
-  // Filtrar parcelas pendentes para trials
-  const getFilteredPendingInstallments = () => {
+  const getFilteredPendingPayments = () => {
     if (isTrialUser()) {
-      return [] // Trial não tem parcelas pendentes
+      return []
     }
-    return pendingInstallments
+    return pendingPayments
   }
 
   const getAccountStatus = () => {
@@ -162,7 +150,6 @@ function DashboardClient({ user }: Props) {
   }
 
   const getPaymentAlert = () => {
-    // Se é trial e está expirando
     if (isTrialUser() && paymentSummary?.currentPlan?.period?.expiresAt) {
       const expiresAt = paymentSummary.currentPlan.period.expiresAt
       const daysLeft = getDaysUntilDue(expiresAt)
@@ -176,10 +163,9 @@ function DashboardClient({ user }: Props) {
         }
       }
 
-      return null // Trial com mais de 7 dias, não mostra alerta
+      return null
     }
 
-    // Resto da lógica original para planos pagos
     if ((paymentSummary?.overdueAmount ?? 0) > 0) {
       return {
         type: 'error' as const,
@@ -189,15 +175,15 @@ function DashboardClient({ user }: Props) {
       }
     }
 
-    if (pendingInstallments.length > 0) {
-      const nextDue = pendingInstallments[0]
+    if (pendingPayments.length > 0) {
+      const nextDue = pendingPayments[0]
       const daysUntilDue = getDaysUntilDue(nextDue.dueDate)
 
       if (daysUntilDue <= 7) {
         return {
           type: 'warning' as const,
           title: 'Vencimento Próximo',
-          message: `Parcela de ${formatPrice(nextDue.amount)} vence em ${daysUntilDue} ${daysUntilDue === 1 ? 'dia' : 'dias'}.`,
+          message: `Pagamento de ${formatPrice(nextDue.totalAmount)} vence em ${daysUntilDue} ${daysUntilDue === 1 ? 'dia' : 'dias'}.`,
           action: 'Ver Detalhes'
         }
       }
@@ -208,7 +194,7 @@ function DashboardClient({ user }: Props) {
 
   const alert = getPaymentAlert()
   const dueInfo = getNextDueInfo()
-  const filteredInstallments = getFilteredPendingInstallments()
+  const filteredPayments = getFilteredPendingPayments()
 
   return (
     <MainLayout>
@@ -234,7 +220,6 @@ function DashboardClient({ user }: Props) {
             )}
           </div>
 
-          {/* Alerta de Pagamento */}
           {alert && (
             <div className={`mb-6 rounded-lg p-4 ${alert.type === 'error' ? 'bg-red-50 border border-red-200' :
                 alert.type === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
@@ -270,9 +255,7 @@ function DashboardClient({ user }: Props) {
             </div>
           )}
 
-          {/* Cards do Dashboard */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Plano Atual */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -304,7 +287,6 @@ function DashboardClient({ user }: Props) {
               </div>
             </div>
 
-            {/* Status */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -329,7 +311,6 @@ function DashboardClient({ user }: Props) {
               </div>
             </div>
 
-            {/* Valor Pendente */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -358,7 +339,6 @@ function DashboardClient({ user }: Props) {
               </div>
             </div>
 
-            {/* Próximo Vencimento / Trial Expira */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -396,12 +376,10 @@ function DashboardClient({ user }: Props) {
             </div>
           </div>
 
-          {/* Seções do Dashboard */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Parcelas Pendentes / Informações do Trial */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                {isTrialUser() ? 'Informações do Trial' : 'Parcelas Pendentes'}
+                {isTrialUser() ? 'Informações do Trial' : 'Pagamentos Pendentes'}
               </h2>
 
               {loading ? (
@@ -412,7 +390,6 @@ function DashboardClient({ user }: Props) {
                   </div>
                 </div>
               ) : isTrialUser() ? (
-                // Conteúdo especial para trial
                 <div className="space-y-3">
                   <div className="p-3 bg-blue-50 rounded-lg">
                     <div className="flex items-center">
@@ -439,19 +416,23 @@ function DashboardClient({ user }: Props) {
                     </button>
                   </div>
                 </div>
-              ) : filteredInstallments.length > 0 ? (
-                // Conteúdo normal para planos pagos
+              ) : filteredPayments.length > 0 ? (
                 <div className="space-y-3">
-                  {filteredInstallments.slice(0, 3).map((installment) => {
-                    const daysUntilDue = getDaysUntilDue(installment.dueDate)
+                  {filteredPayments.slice(0, 3).map((payment) => {
+                    const daysUntilDue = getDaysUntilDue(payment.dueDate)
                     return (
-                      <div key={installment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                           <p className="font-medium text-gray-900">
-                            Pagamento {installment.installmentNumber}
+                            {payment.clientPlan.plan.name}
                           </p>
                           <p className="text-sm text-gray-600">
-                            {installment.payment.clientPlan.plan.name}
+                            {payment.installments > 1 ? `${payment.installments}x parcelas` : 'Pagamento único'}
+                            {payment.absorbTax && (
+                              <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                                Taxa incluída
+                              </span>
+                            )}
                           </p>
                           <p className="text-xs text-gray-500">
                             Vence em {daysUntilDue} {daysUntilDue === 1 ? 'dia' : 'dias'}
@@ -459,8 +440,13 @@ function DashboardClient({ user }: Props) {
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-gray-900">
-                            {formatPrice(installment.amount)}
+                            {formatPrice(payment.totalAmount)}
                           </p>
+                          {payment.installments > 1 && (
+                            <p className="text-xs text-gray-600">
+                              {payment.installments}x de {formatPrice(payment.totalAmount / payment.installments)}
+                            </p>
+                          )}
                           <span className={`text-xs px-2 py-1 rounded-full ${daysUntilDue < 0 ? 'bg-red-100 text-red-800' :
                               daysUntilDue <= 7 ? 'bg-yellow-100 text-yellow-800' :
                                 'bg-green-100 text-green-800'
@@ -472,12 +458,12 @@ function DashboardClient({ user }: Props) {
                       </div>
                     )
                   })}
-                  {filteredInstallments.length > 3 && (
+                  {filteredPayments.length > 3 && (
                     <a
-                      href="/installments-client"
+                      href="/payments-client"
                       className="w-full text-center py-2 text-blue-600 hover:text-blue-700 text-sm font-medium block"
                     >
-                      Ver todos pagamentos ({filteredInstallments.length})
+                      Ver todos pagamentos ({filteredPayments.length})
                     </a>
                   )}
                 </div>
@@ -488,7 +474,6 @@ function DashboardClient({ user }: Props) {
               )}
             </div>
 
-            {/* Ações Rápidas */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h2>
               <div className="space-y-3">
@@ -502,7 +487,10 @@ function DashboardClient({ user }: Props) {
                   <p className="text-sm text-gray-600 mt-1">Alterar ou renovar seu plano</p>
                 </button>
 
-                <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
+                <button 
+                  onClick={() => router.push('/payments-client')}
+                  className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition"
+                >
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Histórico de Pagamentos</span>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
