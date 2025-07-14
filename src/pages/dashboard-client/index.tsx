@@ -448,7 +448,7 @@ function DashboardClient({ user }: Props) {
                       <div key={installment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                           <p className="font-medium text-gray-900">
-                            Parcela {installment.installmentNumber}
+                            Pagamento {installment.installmentNumber}
                           </p>
                           <p className="text-sm text-gray-600">
                             {installment.payment.clientPlan.plan.name}
@@ -477,13 +477,13 @@ function DashboardClient({ user }: Props) {
                       href="/installments-client"
                       className="w-full text-center py-2 text-blue-600 hover:text-blue-700 text-sm font-medium block"
                     >
-                      Ver todas as parcelas ({filteredInstallments.length})
+                      Ver todos pagamentos ({filteredInstallments.length})
                     </a>
                   )}
                 </div>
               ) : (
                 <p className="text-gray-500 text-center py-8">
-                  Nenhuma parcela pendente
+                  Nenhum pagamento pendente
                 </p>
               )}
             </div>

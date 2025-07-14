@@ -3,7 +3,19 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useState } from 'react'
-import { ArrowRightIcon, Bars3Icon, XMarkIcon, UserCircleIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/20/solid'
+import { 
+  ArrowRightIcon, 
+  Bars3Icon, 
+  XMarkIcon, 
+  UserCircleIcon, 
+  ArrowRightOnRectangleIcon,
+  HomeIcon,
+  UsersIcon,
+  CreditCardIcon,
+  DocumentTextIcon,
+  CurrencyDollarIcon,
+  UserGroupIcon
+} from '@heroicons/react/20/solid'
 import { useRouter } from 'next/navigation'
 import { useAuthContext } from '@/contexts/AuthContext'
 
@@ -33,44 +45,41 @@ export default function Navbar() {
         </div>
 
        {/* Menu Desktop */}
-      <nav className="hidden md:flex items-center gap-6">
-          {/* Dropdown */}
-          <div className="relative group">
-            <button className="flex items-center gap-1 hover:text-yellow-400 transition">
-            Menu All
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            <div className="absolute left-0 top-full mt-2 hidden group-hover:block bg-white text-black rounded shadow-md z-50 min-w-[200px] py-2">
-              <Link href="#" className="block px-4 py-2 hover:bg-gray-100 text-sm">Opção 1</Link>
-              <Link href="#" className="block px-4 py-2 hover:bg-gray-100 text-sm">Opção 2</Link>
-              <Link href="#" className="block px-4 py-2 hover:bg-gray-100 text-sm">Opção 3</Link>
-            </div>
-          </div>
-
-          <Link href="#" className="hover:text-yellow-400 transition">Opção All</Link>
+      <nav className="hidden md:flex items-center gap-6">    
           
           {/* Só mostra menus específicos após carregar e confirmar contexto */}
           {!isLoading && user?.context === 'CLIENT' && (
           <>
-            <Link href="/users" className="hover:text-yellow-400 transition">
+            <Link href="/dashboard-client" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <HomeIcon className="h-4 w-4" />
+              Dashboard
+            </Link>
+            <Link href="/users" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <UsersIcon className="h-4 w-4" />
               Usuários
             </Link>
-            <Link href="/installments-client" className="hover:text-yellow-400 transition">
-              Minhas Parcelas
+            <Link href="/installments-client" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <CreditCardIcon className="h-4 w-4" />
+              Meus Pagamentos
             </Link>
           </>
         )}
           {!isLoading && user?.context === 'BACKOFFICE' && (
           <>
-            <Link href="/backoffice/terms" className="hover:text-yellow-400 transition">
+            <Link href="/dashboard-backoffice" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <HomeIcon className="h-4 w-4" />
+              Dashboard
+            </Link>
+            <Link href="/backoffice/terms" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <DocumentTextIcon className="h-4 w-4" />
               Termos
             </Link>
-            <Link href="/backoffice/plans" className="hover:text-yellow-400 transition">
+            <Link href="/backoffice/plans" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <CurrencyDollarIcon className="h-4 w-4" />
               Planos
           </Link>
-          <Link href="/backoffice/clients" className="hover:text-yellow-400 transition">
+          <Link href="/backoffice/clients" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <UserGroupIcon className="h-4 w-4" />
               Clientes
           </Link>
           </>
@@ -134,56 +143,74 @@ export default function Navbar() {
       {isOpen && (
         <div className="fixed inset-0 bg-black/60 z-50">
           <div className="fixed left-0 top-0 w-64 h-full bg-white text-black p-6 flex flex-col gap-4 z-50">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-lg font-bold">Menu</span>
-              <button onClick={() => setIsOpen(false)}>
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
+            <button 
+              onClick={() => setIsOpen(false)}
+              className="self-end mb-4 text-neutral-500 hover:text-neutral-700"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
 
-            {/* links gerais */}
-            <Link href="#" onClick={() => setIsOpen(false)} className="hover:text-yellow-600">Leilões</Link>
-            
             {/* Links específicos do contexto - só mostra após carregar */}
             {!isLoading && user?.context === 'CLIENT' && (
               <>
                 <Link
+                  href="/dashboard-client"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600"
+                >
+                  <HomeIcon className="h-4 w-4" />
+                  Dashboard
+                </Link>
+                <Link
                   href="/users"
                   onClick={() => setIsOpen(false)}
-                  className="hover:text-yellow-600"
+                  className="flex items-center gap-2 hover:text-yellow-600"
                 >
+                  <UsersIcon className="h-4 w-4" />
                   Usuários
                 </Link>
                 <Link
                   href="/installments-client"
                   onClick={() => setIsOpen(false)}
-                  className="hover:text-yellow-600"
+                  className="flex items-center gap-2 hover:text-yellow-600"
                 >
-                  Minhas Parcelas
+                  <CreditCardIcon className="h-4 w-4" />
+                  Meus Pagamentos
                 </Link>
               </>
             )}
             {!isLoading && user?.context === 'BACKOFFICE' && (
               <>
                 <Link
+                  href="/dashboard-backoffice"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600"
+                  >
+                  <HomeIcon className="h-4 w-4" />
+                  Dashboard
+                </Link>
+                <Link
                   href="/backoffice/terms"
                   onClick={() => setIsOpen(false)}
-                  className="hover:text-yellow-600"
+                  className="flex items-center gap-2 hover:text-yellow-600"
                   >
+                  <DocumentTextIcon className="h-4 w-4" />
                   Termos
                 </Link>
                 <Link
                     href="/backoffice/plans"
                     onClick={() => setIsOpen(false)}
-                    className="hover:text-yellow-600"
+                    className="flex items-center gap-2 hover:text-yellow-600"
                     >
+                    <CurrencyDollarIcon className="h-4 w-4" />
                     Planos
                 </Link>
                 <Link
                     href="/backoffice/clients"
                     onClick={() => setIsOpen(false)}
-                    className="hover:text-yellow-600"
+                    className="flex items-center gap-2 hover:text-yellow-600"
                     >
+                    <UserGroupIcon className="h-4 w-4" />
                     Clientes
                 </Link>
               </>

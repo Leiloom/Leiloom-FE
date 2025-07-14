@@ -155,7 +155,7 @@ function UserManagementPage({ user }: Props) {
             // Calcula informações do plano
             if (paymentSummary.currentPlan) {
                 const activeUsers = usersData.filter(u => u.status !== 'EXCLUDED').length
-                const maxUsers = paymentSummary.currentPlan.period?.isTrial 
+                const maxUsers = paymentSummary.currentPlan.period?.isTrial
                     ? 1 // Trial pode ter usuários somente um
                     : (paymentSummary.currentPlan?.numberOfUsers || 5)// Default se não tiver numberOfUsers definido no plano
 
@@ -264,9 +264,8 @@ function UserManagementPage({ user }: Props) {
 
                                     {/* Usuários Utilizados */}
                                     <div className="flex items-center space-x-3">
-                                        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                                            planInfo.canAddUsers ? 'bg-green-100' : 'bg-red-100'
-                                        }`}>
+                                        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${planInfo.canAddUsers ? 'bg-green-100' : 'bg-red-100'
+                                            }`}>
                                             {planInfo.canAddUsers ? (
                                                 <CheckCircle className="h-5 w-5 text-green-600" />
                                             ) : (
@@ -275,9 +274,8 @@ function UserManagementPage({ user }: Props) {
                                         </div>
                                         <div>
                                             <p className="text-sm text-gray-600">Usuários Ativos</p>
-                                            <p className={`font-semibold ${
-                                                planInfo.canAddUsers ? 'text-gray-900' : 'text-red-600'
-                                            }`}>
+                                            <p className={`font-semibold ${planInfo.canAddUsers ? 'text-gray-900' : 'text-red-600'
+                                                }`}>
                                                 {planInfo.currentUserCount} de {planInfo.numberOfUsers}
                                             </p>
                                         </div>
@@ -310,7 +308,7 @@ function UserManagementPage({ user }: Props) {
                                             <div>
                                                 <h4 className="text-sm font-medium text-red-800">Limite de usuários atingido</h4>
                                                 <p className="text-sm text-red-700 mt-1">
-                                                    Seu plano "{planInfo.planName}" permite no máximo {planInfo.numberOfUsers} usuários ativos. 
+                                                    Seu plano "{planInfo.planName}" permite no máximo {planInfo.numberOfUsers} usuários ativos.
                                                     Para adicionar mais usuários, considere fazer upgrade do seu plano ou desativar usuários não utilizados.
                                                 </p>
                                             </div>
@@ -421,7 +419,7 @@ function UserManagementPage({ user }: Props) {
                                 enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
                                 leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
                             >
-                                <div className="fixed inset-0 bg-black/25 backdrop-blur-sm" />
+                                <div className="fixed inset-0 bg-black/25" />
                             </Transition.Child>
 
                             <div className="fixed inset-0 overflow-y-auto">
@@ -541,33 +539,46 @@ function UserManagementPage({ user }: Props) {
                                                             </select>
                                                         </div>
 
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-1">Status do Usuário</label>
-                                                            <div className="flex items-center space-x-4 pt-2">
-                                                                <label className="flex items-center">
-                                                                    <input
-                                                                        type="radio"
-                                                                        name="status"
-                                                                        value="APPROVED"
-                                                                        defaultChecked={!editingUser || editingUser.status !== 'EXCLUDED'}
-                                                                        className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"
-                                                                        disabled={isLoading}
-                                                                    />
-                                                                    <span className="ml-2 text-sm text-gray-700">Ativo</span>
-                                                                </label>
-                                                                <label className="flex items-center">
-                                                                    <input
-                                                                        type="radio"
-                                                                        name="status"
-                                                                        value="EXCLUDED"
-                                                                        defaultChecked={editingUser?.status === 'EXCLUDED'}
-                                                                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
-                                                                        disabled={isLoading}
-                                                                    />
-                                                                    <span className="ml-2 text-sm text-gray-700">Inativo</span>
-                                                                </label>
+                                                        {userAction !== 'create' && (
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-1">Status do Usuário</label>
+                                                                <div className="flex items-center space-x-4 pt-2">
+                                                                    <label className="flex items-center">
+                                                                        <input
+                                                                            type="radio"
+                                                                            name="status"
+                                                                            value="APPROVED"
+                                                                            defaultChecked={!editingUser || editingUser.status !== 'EXCLUDED'}
+                                                                            className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"
+                                                                            disabled={isLoading}
+                                                                        />
+                                                                        <span className="ml-2 text-sm text-gray-700">Ativo</span>
+                                                                    </label>
+                                                                    <label className="flex items-center">
+                                                                        <input
+                                                                            type="radio"
+                                                                            name="status"
+                                                                            value="APPROVED"
+                                                                            defaultChecked={!editingUser || editingUser.status !== 'EXCLUDED'}
+                                                                            className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"
+                                                                            disabled={isLoading}
+                                                                        />
+                                                                        <span className="ml-2 text-sm text-gray-700">Ativo</span>
+                                                                    </label>
+                                                                    <label className="flex items-center">
+                                                                        <input
+                                                                            type="radio"
+                                                                            name="status"
+                                                                            value="EXCLUDED"
+                                                                            defaultChecked={editingUser?.status === 'EXCLUDED'}
+                                                                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
+                                                                            disabled={isLoading}
+                                                                        />
+                                                                        <span className="ml-2 text-sm text-gray-700">Inativo</span>
+                                                                    </label>
+                                                                </div>
                                                             </div>
-                                                        </div>
+                                                        )}
                                                     </div>
                                                 </div>
 
