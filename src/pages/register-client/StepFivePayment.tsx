@@ -92,7 +92,8 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                 paymentMethod: selectedPaymentMethod
             })
 
-            await activateClientPlan(subscriptionData.id)
+            await activateClientPlan(subscriptionData.payment.clientPlanId)
+
 
             router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'created'}`)
         } catch (err: any) {
