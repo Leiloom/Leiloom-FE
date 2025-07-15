@@ -183,3 +183,8 @@ export async function getClientPaymentSummary(clientId: string): Promise<Detaile
         return handleAuthError(error, 'Erro ao buscar resumo financeiro do cliente.')
     }
 }
+
+export async function activateClientPlan(clientPlanId: string) {
+  const response = await api.patch(`/client-plans/${clientPlanId}/activate`)
+  return response.data
+}

@@ -2,7 +2,7 @@
 
 import { useRegisterClient } from '@/contexts/RegisterClientContext'
 import { loginClient } from '@/services/authService'
-import { createSubscriptionOnly } from '@/services/paymentService'
+import { createSubscriptionOnly, activateClientPlan } from '@/services/paymentService'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -91,6 +91,8 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
                 installments: selectedInstallments,
                 paymentMethod: selectedPaymentMethod
             })
+
+            await activateClientPlan(subscriptionData.id)
 
             router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'created'}`)
         } catch (err: any) {
