@@ -1,5 +1,5 @@
   'use client'
-
+import Head from 'next/head'
 import { useEffect, useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-toastify'
@@ -175,7 +175,11 @@ import { Button } from '@/components/shared/Button'
 
     return (
       <MainLayout>
-        
+        <Head>
+          <title>Gerenciamento de Clientes - Leiloom</title>
+          <meta name="description" content="Gerencie os clientes cadastrados na plataforma Leiloom" />
+        </Head>
+
         <div className="min-h-screen flex justify-center bg-gray-50">
           <div className="mx-auto py-4 px-4 w-full max-w-none">
             <PageHeader

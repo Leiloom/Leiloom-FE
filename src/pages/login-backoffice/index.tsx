@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -102,6 +102,10 @@ export default function BackOfficeLoginPage() {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Login Back-Office - Leiloom</title>
+        <meta name="description" content="Faça login no Back-Office da plataforma Leiloom" />
+      </Head>
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white shadow-md p-8 rounded w-full max-w-sm space-y-6">
           <h1 className="text-2xl font-bold text-center text-gray-800">Login Back-Office</h1>

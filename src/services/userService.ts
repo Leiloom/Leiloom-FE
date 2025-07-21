@@ -10,9 +10,31 @@ export interface User {
   updatedOn: string
 }
 
+export interface CreateUserDto {
+  name: string
+  email: string
+  password: string
+  role: string
+}
+
 export interface UpdateUserDto {
   name?: string
   email?: string
+  password?: string
+  role?: string
+}
+
+/**
+ * Cria um novo usuário do back office
+ */
+export async function createUser(data: CreateUserDto): Promise<User> {
+  try {
+    const response = await api.post('/users', data)
+    return response.data
+  } catch (error: any) {
+    console.error('Erro ao criar usuário:', error)
+    return Promise.reject({ message: 'Erro ao criar usuário.' })
+  }
 }
 
 /**
@@ -38,6 +60,18 @@ export async function updateUser(id: string, data: UpdateUserDto): Promise<User>
   } catch (error: any) {
     console.error('Erro ao atualizar usuário:', error)
     return Promise.reject({ message: 'Erro ao atualizar usuário.' })
+  }
+}
+
+/**
+ * Remove um usuário do back office
+ */
+export async function deleteUser(id: string): Promise<void> {
+  try {
+    await api.delete(`/users/${id}`)
+  } catch (error: any) {
+    console.error('Erro ao remover usuário:', error)
+    return Promise.reject({ message: 'Erro ao remover usuário.' })
   }
 }
 

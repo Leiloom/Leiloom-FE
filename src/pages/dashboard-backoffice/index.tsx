@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import MainLayout from '@/layouts/MainLayout'
@@ -174,6 +174,10 @@ function DashboardBackOffice({ user }: Props) {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Dashboard BackOffice - Leiloom</title>
+        <meta name="description" content="Dashboard BackOffice da Leiloom" />
+      </Head>
       <div className="min-h-screen flex justify-center bg-gray-50">
         <section className="py-16 px-4 max-w-7xl mx-auto w-full">
           {/* Header */}

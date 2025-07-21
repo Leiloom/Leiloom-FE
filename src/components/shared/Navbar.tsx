@@ -34,7 +34,7 @@ export default function Navbar() {
   }
 
   return (
-    <header className="bg-neutral-900 text-white text-xs font-medium">
+    <header className="bg-neutral-900 text-white text-sm font-medium">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
 
         {/* Logo + Nome */}
@@ -78,8 +78,12 @@ export default function Navbar() {
               <CurrencyDollarIcon className="h-4 w-4" />
               Planos
           </Link>
-          <Link href="/backoffice/clients" className="flex items-center gap-2 hover:text-yellow-400 transition">
+          <Link href="/backoffice/users" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <UserGroupIcon className="h-4 w-4" />
+              Usuários
+          </Link>
+          <Link href="/backoffice/clients" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <UsersIcon  className="h-4 w-4" />
               Clientes
           </Link>
           </>
@@ -101,14 +105,14 @@ export default function Navbar() {
             <>
               <Link
                 href="/profile"
-                className="flex items-center text-white hover:text-yellow-400 transition text-[12px]"
+                className="flex items-center text-white hover:text-yellow-400 transition text-sm"
               >
                 <UserCircleIcon className="h-5 w-5 mr-1" />
                 Olá, {user?.name}
               </Link>
               <button
                 onClick={handleLogout}
-                className="flex items-center text-white hover:text-yellow-400 transition text-[12px]"
+                className="flex items-center text-white hover:text-yellow-400 transition text-sm"
               >
                 <ArrowRightOnRectangleIcon className="h-5 w-5 mr-1" />
                 Sair
@@ -118,14 +122,14 @@ export default function Navbar() {
             <>
               <Link
                 href="/login"
-                className="flex items-center text-white hover:text-yellow-400 transition text-[12px]"
+                className="flex items-center text-white hover:text-yellow-400 transition text-sm"
               >
                 Acesse sua conta
                 <ArrowRightIcon className="ml-1 h-4 w-4 text-white" />
               </Link>
               <Link
                 href="/register-client"
-                className="bg-yellow-400 text-black px-4 py-1.5 text-[12px] rounded hover:bg-yellow-300 transition min-w-[92px] h-[32px] flex items-center justify-center font-medium"
+                className="bg-yellow-400 text-black px-4 py-1.5 text-sm rounded hover:bg-yellow-300 transition min-w-[92px] h-[32px] flex items-center justify-center font-medium"
               >
                 Criar conta
               </Link>
@@ -156,25 +160,25 @@ export default function Navbar() {
                 <Link
                   href="/dashboard-client"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 hover:text-yellow-600"
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
                 >
-                  <HomeIcon className="h-4 w-4" />
+                  <HomeIcon className="h-5 w-5" />
                   Dashboard
                 </Link>
                 <Link
                   href="/users"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 hover:text-yellow-600"
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
                 >
-                  <UsersIcon className="h-4 w-4" />
+                  <UsersIcon className="h-5 w-5" />
                   Usuários
                 </Link>
                 <Link
                   href="/installments-client"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 hover:text-yellow-600"
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
                 >
-                  <CreditCardIcon className="h-4 w-4" />
+                  <CreditCardIcon className="h-5 w-5" />
                   Meus Pagamentos
                 </Link>
               </>
@@ -184,33 +188,41 @@ export default function Navbar() {
                 <Link
                   href="/dashboard-backoffice"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 hover:text-yellow-600"
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
                   >
-                  <HomeIcon className="h-4 w-4" />
+                  <HomeIcon className="h-5 w-5" />
                   Dashboard
                 </Link>
                 <Link
                   href="/backoffice/terms"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 hover:text-yellow-600"
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
                   >
-                  <DocumentTextIcon className="h-4 w-4" />
+                  <DocumentTextIcon className="h-5 w-5" />
                   Termos
                 </Link>
                 <Link
                     href="/backoffice/plans"
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 hover:text-yellow-600"
+                    className="flex items-center gap-2 hover:text-yellow-600 text-base"
                     >
-                    <CurrencyDollarIcon className="h-4 w-4" />
+                    <CurrencyDollarIcon className="h-5 w-5" />
                     Planos
+                </Link>
+                <Link
+                    href="/backoffice/users"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                    >
+                    <UserGroupIcon className="h-5 w-5" />
+                    Usuários
                 </Link>
                 <Link
                     href="/backoffice/clients"
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 hover:text-yellow-600"
+                    className="flex items-center gap-2 hover:text-yellow-600 text-base"
                     >
-                    <UserGroupIcon className="h-4 w-4" />
+                    <UsersIcon  className="h-5 w-5" />
                     Clientes
                 </Link>
               </>
@@ -232,13 +244,13 @@ export default function Navbar() {
                 <Link
                   href="/profile"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 text-sm text-neutral-700"
+                  className="flex items-center gap-2 text-base text-neutral-700"
                 >
                   <UserCircleIcon className="h-5 w-5" /> Perfil
                 </Link>
                 <button
                   onClick={() => { handleLogout(); setIsOpen(false) }}
-                  className="flex items-center gap-2 text-sm text-neutral-700"
+                  className="flex items-center gap-2 text-base text-neutral-700"
                 >
                   <ArrowRightOnRectangleIcon className="h-5 w-5" /> Sair
                 </button>
@@ -248,14 +260,14 @@ export default function Navbar() {
                 <Link
                   href="/login"
                   onClick={() => setIsOpen(false)}
-                  className="text-sm text-neutral-700 flex items-center gap-1"
+                  className="text-base text-neutral-700 flex items-center gap-1"
                 >
                   Acesse sua conta <ArrowRightIcon className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/register-client"
                   onClick={() => setIsOpen(false)}
-                  className="bg-yellow-400 text-black px-4 py-2 rounded text-sm text-center hover:bg-yellow-300 transition"
+                  className="bg-yellow-400 text-black px-4 py-2 rounded text-base text-center hover:bg-yellow-300 transition"
                 >
                   Criar conta
                 </Link>

@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -142,6 +142,7 @@ export default function LoginPage() {
   if (isLoading) {
     return (
       <MainLayout>
+        
         <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600 mx-auto mb-4"></div>
@@ -168,11 +169,15 @@ export default function LoginPage() {
 
   return (
     <MainLayout>
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="bg-white shadow-md p-8 rounded w-full max-w-md space-y-6">
-          <h1 className="text-2xl font-bold text-center text-gray-800">Entrar</h1>
+      <Head>
+          <title>Login - Leiloom</title>
+          <meta name="description" content="Faça login na plataforma Leiloom" />
+        </Head>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 pt-16 pb-8">
+        <div className="bg-white shadow-lg p-8 rounded-lg w-full max-w-md">
+          <h1 className="text-2xl font-bold text-center text-gray-800 mb-8">Entrar</h1>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Tipo de pessoa - Estilizado */}
             <div className="flex justify-center mb-6">
               <div className="bg-gray-100 p-1 rounded-full flex gap-1 w-full max-w-xs">
@@ -301,6 +306,19 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+
+          {/* Separador */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-4">Ainda não tem uma conta?</p>
+              <a
+                href="/register-client"
+                className="w-full inline-block bg-white text-yellow-600 border-2 border-yellow-400 py-2.5 rounded-lg hover:bg-yellow-50 focus:ring-4 focus:ring-yellow-200 font-medium transition-all duration-300 shadow-sm text-center"
+              >
+                Criar conta
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </MainLayout>

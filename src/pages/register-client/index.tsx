@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useState } from 'react'
 import { RegisterClientProvider } from '@/contexts/RegisterClientContext'
 import StepOneForm from './StepOneForm'
@@ -46,49 +46,55 @@ function handlePlanSelected(plan: Plan) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-white px-4">
-      <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-900">
-          {step === 1 && 'Crie sua conta - Dados básicos'}
-          {step === 2 && 'Verifique seu e-mail'}
-          {step === 3 && 'Preencha seus dados pessoais'}
-          {step === 4 && 'Escolha seu plano'}
-          {step === 5 && 'Finalizar assinatura'}
-        </h1>
+    <>
+      <Head>
+        <title>Registrar Cliente - Leiloom</title>
+        <meta name="description" content="Crie sua conta e escolha seu plano na plataforma Leiloom" />
+      </Head>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-white px-4">
+        <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
+          <h1 className="text-2xl font-bold mb-6 text-center text-gray-900">
+            {step === 1 && 'Crie sua conta - Dados básicos'}
+            {step === 2 && 'Verifique seu e-mail'}
+            {step === 3 && 'Preencha seus dados pessoais'}
+            {step === 4 && 'Escolha seu plano'}
+            {step === 5 && 'Finalizar assinatura'}
+          </h1>
 
-        {step === 1 && <StepOneForm onNext={() => setStep(2)} />}
-        {step === 2 && <StepTwoEmailCode onNext={() => setStep(3)} onBack={() => setStep(1)} />}
-        {step === 3 && <StepThreeDetails onNext={() => setStep(4)} />}
-        {step === 4 && (
-          <StepFourPlans 
-            onBack={() => setStep(3)} 
-            onNext={handlePlanSelected}
-          />
-        )}
-        {step === 5 && selectedPlan && (
-          <StepFivePayment 
-            selectedPlan={selectedPlan}
-            onBack={handleBackToPlans}
-          />
-        )}
+          {step === 1 && <StepOneForm onNext={() => setStep(2)} />}
+          {step === 2 && <StepTwoEmailCode onNext={() => setStep(3)} onBack={() => setStep(1)} />}
+          {step === 3 && <StepThreeDetails onNext={() => setStep(4)} />}
+          {step === 4 && (
+            <StepFourPlans 
+              onBack={() => setStep(3)} 
+              onNext={handlePlanSelected}
+            />
+          )}
+          {step === 5 && selectedPlan && (
+            <StepFivePayment 
+              selectedPlan={selectedPlan}
+              onBack={handleBackToPlans}
+            />
+          )}
 
-        <div className="flex justify-center mt-6">
-          <div className="flex space-x-2">
-            {[1, 2, 3, 4, 5].map((s) => (
-              <div
-                key={s}
-                className={`w-3 h-3 rounded-full ${
-                  s === step 
-                    ? 'bg-yellow-400' 
-                    : s < step 
-                    ? 'bg-green-500' 
-                    : 'bg-gray-300'
-                }`}
-              />
-            ))}
+          <div className="flex justify-center mt-6">
+            <div className="flex space-x-2">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <div
+                  key={s}
+                  className={`w-3 h-3 rounded-full ${
+                    s === step 
+                      ? 'bg-yellow-400' 
+                      : s < step 
+                      ? 'bg-green-500' 
+                      : 'bg-gray-300'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

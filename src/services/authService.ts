@@ -235,3 +235,27 @@ export async function changePassword(user: any, payload: {
     return handleAuthError(error, 'Erro ao alterar senha.')
   }
 }
+
+export interface RequestPasswordResetDto {
+  email: string
+  context: 'BACKOFFICE' | 'CLIENT'
+}
+
+export interface ResetPasswordDto {
+  code: string
+  token: string
+  newPassword: string
+}
+
+/**
+ * Solicita redefinição de senha (envia email com código)
+ */
+export async function requestPasswordReset(data: RequestPasswordResetDto): Promise<{ message: string }> {
+  try {
+    const response = await api.post('/auth/forgot-password', data)
+    return response.data
+  } catch (error: any) {
+    console.error('Erro ao solicitar redefinição de senha:', error)
+    return Promise.reject({ message: 'Erro ao solicitar redefinição de senha.' })
+  }
+}

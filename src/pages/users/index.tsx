@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useState, useEffect, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-toastify'
@@ -228,6 +228,10 @@ function UserManagementPage({ user }: Props) {
 
     return (
         <MainLayout>
+            <Head>
+                <title>Gerenciamento de Usuários - Leiloom</title>
+                <meta name="description" content="Gerencie os usuários do seu cliente na plataforma Leiloom" />
+            </Head>
             <div className="min-h-screen bg-gray-50">
                 <div className="container mx-auto px-4 py-6 max-w-7xl">
 

@@ -111,9 +111,10 @@ async function handleTrialFinish() {
       termsId: currentTerms.id,
     })
     const subscriptionData = await createSubscriptionOnly({
+      clientId: formData.clientId,
       planId: selectedPlan.id!,
-      installments: 1, // Trial sempre 1x
-      paymentMethod: 'PIX' // Qualquer um, já que é grátis
+      installments: 1, 
+      paymentMethod: 'PIX' 
     })
 
 

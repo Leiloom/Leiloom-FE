@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useEffect, useState, Fragment } from 'react'
 import { toast } from 'react-toastify'
 import { Dialog, Transition } from '@headlessui/react'
@@ -116,6 +116,10 @@ function TermsAdminPage({ user }: Props) {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Gerenciamento de Termos de Uso - Leiloom</title>
+        <meta name="description" content="Gerencie os termos de uso da plataforma Leiloom" />
+      </Head>
       <div className="min-h-screen flex justify-center bg-gray-50">
       <div className="mx-auto py-4 px-4 w-full max-w-none">
         <PageHeader 

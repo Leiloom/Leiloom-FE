@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useEffect, useState, Fragment } from 'react'
 import { toast } from 'react-toastify'
 import { Dialog, Transition } from '@headlessui/react'
@@ -181,6 +181,10 @@ function PlansAdminPage({ user }: Props) {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Gerenciamento de Planos - Leiloom</title>
+        <meta name="description" content="Gerencie os planos de assinatura disponíveis na plataforma Leiloom" />
+      </Head>
       <div className="min-h-screen flex justify-center bg-gray-50">
         <div className="mx-auto py-4 px-4 w-full max-w-none">
           <PageHeader

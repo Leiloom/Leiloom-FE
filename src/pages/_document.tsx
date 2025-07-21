@@ -1,4 +1,6 @@
 import { Html, Head, Main, NextScript } from "next/document";
+<script src="https://sdk.mercadopago.com/js/v2"></script>
+
 
 export default function Document(){
     return(

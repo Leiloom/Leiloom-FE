@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import MainLayout from '@/layouts/MainLayout'
@@ -198,6 +198,10 @@ function DashboardClient({ user }: Props) {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Dashboard - Leiloom</title>
+        <meta name="description" content="Gerencie sua conta e acompanhe suas atividades na plataforma Leiloom" />
+      </Head>
       <div className="min-h-screen flex justify-center bg-gray-50">
         <section className="py-16 px-4 max-w-6xl mx-auto w-full">
           <div className="mb-8">

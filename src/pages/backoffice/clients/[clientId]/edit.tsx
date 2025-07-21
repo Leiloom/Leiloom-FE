@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useState, useEffect, Fragment } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { toast } from 'react-toastify'
@@ -172,7 +172,6 @@ function ClientEditPage() {
   const tabs = [
     { id: 'info', label: 'Informações', icon: User },
     { id: 'users', label: 'Usuários', icon: User },
-    { id: 'invoices', label: 'Faturas', icon: CreditCard },
     { id: 'plans', label: 'Planos', icon: Package }
   ]
 
@@ -184,17 +183,6 @@ function ClientEditPage() {
     isTrial: boolean
   } | null>(null)
 
-  // Funções utilitárias
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(price)
-  }
-
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('pt-BR')
-  }
 
   // Effects
   useEffect(() => {
@@ -425,6 +413,10 @@ function ClientEditPage() {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Editar Cliente - {client.name}</title>
+        <meta name="description" content={`Editar informações do cliente ${client.name}`} />
+      </Head>
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-6 max-w-7xl">
 
@@ -742,58 +734,6 @@ function ClientEditPage() {
                   </div>
                 </div>
               )}
-              {/* Faturas */}
-              {activeTab === 'invoices' && (
-                <div className="space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    {paymentSummary?.recentPayments.length ? (
-                      <table className="min-w-full table-auto text-sm">
-                        <thead>
-                          <tr className="text-left">
-                            <th className="px-2 py-1">Plano</th>
-                            <th className="px-2 py-1">Valor Total</th>
-                            <th className="px-2 py-1">Parcelas</th>
-                            <th className="px-2 py-1">Método</th>
-                            <th className="px-2 py-1">Status</th>
-                            <th className="px-2 py-1">Criado em</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paymentSummary.recentPayments.map((payment) => (
-                            <tr key={payment.id} className="border-t">
-                              <td className="px-2 py-1">{payment.planName ?? '–'}</td>
-                              <td className="px-2 py-1">
-                                R$ {payment.totalAmount.toFixed(2)}
-                                {payment.absorbTax && <span className="text-xs ml-1 text-blue-500">(com taxa)</span>}
-                              </td>
-                              <td className="px-2 py-1">{payment.installments}x</td>
-                              <td className="px-2 py-1">{payment.paymentMethod}</td>
-                              <td className="px-2 py-1">
-                                <span
-                                  className={`px-2 py-1 rounded text-white text-xs ${payment.status === 'PAID'
-                                      ? 'bg-green-500'
-                                      : payment.status === 'OVERDUE'
-                                        ? 'bg-red-500'
-                                        : payment.status === 'PENDING'
-                                          ? 'bg-yellow-500'
-                                          : 'bg-gray-400'
-                                    }`}
-                                >
-                                  {payment.status}
-                                </span>
-                              </td>
-                              <td className="px-2 py-1">{new Date(payment.createdAt).toLocaleDateString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <p className="text-sm text-gray-500">Nenhum pagamento registrado.</p>
-                    )}
-
-                  </div>
-                </div>
-              )}
 
               {/* Planos */}
               {activeTab === 'plans' && (
@@ -951,35 +891,6 @@ function ClientEditPage() {
                           </Button>
                         </div>
                       </form>
-                    </Dialog.Panel>
-                  </Transition.Child>
-                </div>
-              </div>
-            </Dialog>
-          </Transition>
-
-          {/* Modal de Detalhes da Fatura */}
-          <Transition appear show={isInstallmentModalOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-50" onClose={() => setIsInstallmentModalOpen(false)}>
-              <Transition.Child as={Fragment}
-                enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
-                leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
-              >
-                <div className="fixed inset-0 bg-black/25 backdrop-blur-sm" />
-              </Transition.Child>
-
-              <div className="fixed inset-0 overflow-y-auto">
-                <div className="flex min-h-full items-center justify-center p-4">
-                  <Transition.Child as={Fragment}
-                    enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
-                    leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
-                  >
-                    <Dialog.Panel className="w-full max-w-2xl bg-white rounded-lg shadow-xl overflow-hidden">
-                      <div className="px-6 py-4 border-b border-gray-200">
-                        <Dialog.Title className="text-lg font-semibold text-gray-900">
-                          Detalhes da Fatura
-                        </Dialog.Title>
-                      </div>
                     </Dialog.Panel>
                   </Transition.Child>
                 </div>

@@ -1,6 +1,13 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+// Adiciona a tipagem para window.MercadoPago
+declare global {
+  interface Window {
+    MercadoPago: any
+  }
+}
+import Head from 'next/head'
+import { useState, useEffect, Fragment, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-toastify'
 import { Dialog, Transition } from '@headlessui/react'
@@ -82,18 +89,20 @@ function ClientPaymentsPage({ user }: Props) {
     }).format(price)
   }
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('pt-BR')
+  const formatDate = (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date
+    return dateObj.toLocaleDateString('pt-BR')
   }
 
-  const getDaysUntilDue = (dueDate: Date) => {
+  const getDaysUntilDue = (dueDate: Date | string) => {
+    const dateObj = typeof dueDate === 'string' ? new Date(dueDate) : dueDate
     const today = new Date()
-    const diffTime = dueDate.getTime() - today.getTime()
+    const diffTime = dateObj.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     return diffDays
   }
 
-  const getPaymentInfo = (dueDate: Date, status: string) => {
+  const getPaymentInfo = (dueDate: Date | string, status: string) => {
     if (status === 'PAID') return { 
       type: 'paid', 
       message: 'Pago', 
@@ -199,7 +208,7 @@ function ClientPaymentsPage({ user }: Props) {
     { 
       key: 'dueDate', 
       header: 'Vencimento',
-      render: (dueDate: Date, item: PendingPayment) => {
+      render: (dueDate: Date | string, item: PendingPayment) => {
         const info = getPaymentInfo(dueDate, item.status)
         return (
           <div>
@@ -259,11 +268,7 @@ function ClientPaymentsPage({ user }: Props) {
     loadData()
   }, [])
 
-  useEffect(() => {
-    filterPayments()
-  }, [payments, searchTerm, statusFilter, dateFilter])
-
-  function filterPayments() {
+  const filterPayments = useCallback(() => {
     let filtered = [...payments]
 
     if (searchTerm) {
@@ -288,12 +293,14 @@ function ClientPaymentsPage({ user }: Props) {
           case 'overdue':
             return daysUntilDue < 0 && payment.status !== 'PAID'
           case 'thisMonth':
-            return payment.dueDate.getMonth() === today.getMonth() && 
-                   payment.dueDate.getFullYear() === today.getFullYear()
+            const paymentDate = typeof payment.dueDate === 'string' ? new Date(payment.dueDate) : payment.dueDate
+            return paymentDate.getMonth() === today.getMonth() && 
+                   paymentDate.getFullYear() === today.getFullYear()
           case 'nextMonth':
             const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1)
-            return payment.dueDate.getMonth() === nextMonth.getMonth() && 
-                   payment.dueDate.getFullYear() === nextMonth.getFullYear()
+            const paymentDate2 = typeof payment.dueDate === 'string' ? new Date(payment.dueDate) : payment.dueDate
+            return paymentDate2.getMonth() === nextMonth.getMonth() && 
+                   paymentDate2.getFullYear() === nextMonth.getFullYear()
           case 'paid':
             return payment.status === 'PAID'
           default:
@@ -308,12 +315,18 @@ function ClientPaymentsPage({ user }: Props) {
       if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1
       if (b.status === 'OVERDUE' && a.status !== 'OVERDUE') return 1
       
-      return a.dueDate.getTime() - b.dueDate.getTime()
+      const dateA = typeof a.dueDate === 'string' ? new Date(a.dueDate) : a.dueDate
+      const dateB = typeof b.dueDate === 'string' ? new Date(b.dueDate) : b.dueDate
+      return dateA.getTime() - dateB.getTime()
     })
 
     setFilteredPayments(filtered)
     resetToFirstPage()
-  }
+  }, [payments, searchTerm, statusFilter, dateFilter, resetToFirstPage])
+
+  useEffect(() => {
+    filterPayments()
+  }, [filterPayments])
 
   async function loadData() {
     setIsLoading(true)
@@ -352,13 +365,125 @@ function ClientPaymentsPage({ user }: Props) {
     }
   }
 
-  function handleGoToPayment() {
-    if (selectedPaymentForPayment) {
-      toast.info('Redirecionando para Mercado Pago...')
-      setIsPaymentModalOpen(false)
-    }
+  // Função para carregar o script do MercadoPago dinamicamente
+  const loadMercadoPagoScript = (): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      // Verificar se já existe
+      if (window.MercadoPago) {
+        resolve()
+        return
+      }
+
+      // Verificar se o script já está sendo carregado
+      const existingScript = document.querySelector('script[src*="mercadopago"]')
+      if (existingScript) {
+        existingScript.addEventListener('load', () => resolve())
+        existingScript.addEventListener('error', () => reject(new Error('Erro ao carregar MercadoPago')))
+        return
+      }
+
+      // Criar e carregar o script
+      const script = document.createElement('script')
+      script.src = 'https://sdk.mercadopago.com/js/v2'
+      script.async = true
+      script.onload = () => resolve()
+      script.onerror = () => reject(new Error('Erro ao carregar MercadoPago'))
+      document.head.appendChild(script)
+    })
   }
 
+  async function handleGoToPayment() {
+    if (!selectedPaymentForPayment) return
+
+    setIsLoading(true)
+    try {
+      // Verificar variável de ambiente
+      const mpPublicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY
+      if (!mpPublicKey) {
+        toast.error('Chave do Mercado Pago não configurada')
+        return
+      }
+
+      // Carregar script do MercadoPago se necessário
+      await loadMercadoPagoScript()
+
+      // Verificar se MercadoPago está disponível
+      if (!window.MercadoPago) {
+        toast.error('Mercado Pago não está disponível. Tente novamente.')
+        return
+      }
+
+      const preferenceData = {
+        items: [
+          {
+            title: `Assinatura do plano ${selectedPaymentForPayment.clientPlan.plan.name}`,
+            quantity: 1,
+            unit_price: selectedPaymentForPayment.totalAmount,
+            currency_id: 'BRL',
+            description: `Pagamento via painel - ${selectedPaymentForPayment.clientPlan.plan.name}`
+          }
+        ],
+        payer: {
+          name: user.name?.split(' ')[0] || '',
+          surname: user.name?.split(' ').slice(1).join(' ') || '',
+          email: user.email
+        },
+        back_urls: {
+          success: `${window.location.origin}/payment-success`,
+          failure: `${window.location.origin}/payment-failure`,
+          pending: `${window.location.origin}/payment-pending`
+        },
+        auto_return: 'approved',
+        external_reference: `payment_${selectedPaymentForPayment.id}`,
+        notification_url: `${process.env.NEXT_PUBLIC_API_URL}/payments/webhook`,
+        statement_descriptor: 'Leiloom',
+        payment_methods: {
+          excluded_payment_types: [],
+          excluded_payment_methods: [],
+          installments: selectedPaymentForPayment.installments > 1
+            ? selectedPaymentForPayment.installments
+            : 1
+        },
+        metadata: {
+          plan_id: selectedPaymentForPayment.clientPlan.plan.name,
+          user_email: user.email,
+          payment_id: selectedPaymentForPayment.id
+        }
+      }
+
+      const response = await fetch('/api/mercadopago/create-preference', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferenceData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || `Erro HTTP: ${response.status}`)
+      }
+
+      const { id: preferenceId } = await response.json()
+
+      // Inicializar MercadoPago
+      const mp = new window.MercadoPago(mpPublicKey, {
+        locale: 'pt-BR'
+      })
+
+      // Abrir checkout
+      mp.checkout({
+        preference: { id: preferenceId },
+        autoOpen: true
+      })
+
+      setIsPaymentModalOpen(false)
+    } catch (error: any) {
+      console.error('Erro no pagamento:', error)
+      toast.error(error.message || 'Erro ao iniciar pagamento')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
   const getQuickStats = () => {
     const total = filteredPayments.length
     const pending = filteredPayments.filter(p => p.status === 'PENDING').length
@@ -376,6 +501,10 @@ function ClientPaymentsPage({ user }: Props) {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Meus Pagamentos - Leiloom</title>
+        <meta name="description" content="Acompanhe todos os seus pagamentos e assinaturas na plataforma Leiloom" />
+      </Head>
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-6 max-w-7xl">
           
@@ -735,8 +864,9 @@ function ClientPaymentsPage({ user }: Props) {
                               onClick={handleGoToPayment}
                               variant="primary"
                               className="flex-1"
+                              disabled={isLoading}
                             >
-                              Ir para Pagamento
+                              {isLoading ? 'Carregando...' : 'Ir para Pagamento'}
                             </Button>
                           </div>
                         </div>

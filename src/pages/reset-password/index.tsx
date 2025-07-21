@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
@@ -98,6 +98,10 @@ export default function ResetPasswordPage() {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Redefinir Senha - Leiloom</title>
+        <meta name="description" content="Redefina sua senha na plataforma Leiloom" />
+      </Head>
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white shadow-md p-8 rounded w-full max-w-md space-y-6">
           <h1 className="text-2xl font-bold text-center text-gray-800">Redefinir Senha</h1>

@@ -2,6 +2,7 @@ import { api } from './api'
 import { handleAuthError } from './authService'
 
 export interface CreateSubscriptionPayload {
+    clientId: string
     planId: string
     installments: number
     paymentMethod: 'CREDIT_CARD' | 'PIX' | 'DEBIT_CARD' | 'BANK_SLIP' | 'BANK_TRANSFER'

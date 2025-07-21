@@ -87,6 +87,7 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
             login(token, 'CLIENT')
 
             const subscriptionData = await createSubscriptionOnly({
+                clientId: formData.clientId,
                 planId: selectedPlan.id!,
                 installments: selectedInstallments,
                 paymentMethod: selectedPaymentMethod
@@ -108,7 +109,7 @@ export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymen
         <div className="space-y-6">
             <div className="text-center">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    Escolha o Parcelamento
+                    Faça sua escolha
                 </h2>
                 <p className="text-gray-600">
                     Como você gostaria de pagar seu plano {selectedPlan.name}?

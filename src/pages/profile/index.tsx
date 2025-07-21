@@ -1,5 +1,5 @@
 'use client'
-
+import Head from 'next/head'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -334,6 +334,10 @@ export default function ProfilePage() {
 
   return (
     <MainLayout>
+      <Head>
+        <title>Meu Perfil - Leiloom</title>
+        <meta name="description" content="Gerencie suas informações e configurações de conta na plataforma Leiloom" />
+      </Head>
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-6 max-w-4xl">
           {/* Header */}
