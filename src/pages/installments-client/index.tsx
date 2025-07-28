@@ -1,6 +1,5 @@
 'use client'
 
-// Adiciona a tipagem para window.MercadoPago
 declare global {
   interface Window {
     MercadoPago: any
@@ -20,17 +19,16 @@ import { usePagedData } from '@/hooks/usePagedData'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
 import { TokenPayload } from '@/utils/jwtUtils'
-import { 
-  getPendingPayments,
+import {
+  getAllPaymentsByClient,
   getDetailedPaymentSummary,
   PendingPayment,
-  DetailedPaymentSummary 
+  DetailedPaymentSummary,
+  getPaymentDetails
 } from '@/services/paymentService'
-import { 
-  CreditCard, 
-  Calendar, 
-  DollarSign, 
-  Eye, 
+import {
+  CreditCard,
+  DollarSign,
   AlertTriangle,
   CheckCircle,
   Clock,
@@ -103,54 +101,54 @@ function ClientPaymentsPage({ user }: Props) {
   }
 
   const getPaymentInfo = (dueDate: Date | string, status: string) => {
-    if (status === 'PAID') return { 
-      type: 'paid', 
-      message: 'Pago', 
+    if (status === 'PAID') return {
+      type: 'paid',
+      message: 'Pago',
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       borderColor: 'border-green-200'
     }
-    if (status === 'CANCELLED') return { 
-      type: 'cancelled', 
-      message: 'Cancelado', 
+    if (status === 'CANCELLED') return {
+      type: 'cancelled',
+      message: 'Cancelado',
       color: 'text-gray-600',
       bgColor: 'bg-gray-50',
       borderColor: 'border-gray-200'
     }
-    if (status === 'PROCESSING') return { 
-      type: 'processing', 
-      message: 'Processando', 
+    if (status === 'PROCESSING') return {
+      type: 'processing',
+      message: 'Processando',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       borderColor: 'border-blue-200'
     }
-    
+
     const daysUntilDue = getDaysUntilDue(dueDate)
-    
-    if (daysUntilDue < 0) return { 
-      type: 'overdue', 
+
+    if (daysUntilDue < 0) return {
+      type: 'overdue',
       message: `${Math.abs(daysUntilDue)} dias em atraso`,
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200'
     }
-    if (daysUntilDue === 0) return { 
-      type: 'today', 
+    if (daysUntilDue === 0) return {
+      type: 'today',
       message: 'Vence hoje',
       color: 'text-red-500',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200'
     }
-    if (daysUntilDue <= 7) return { 
-      type: 'urgent', 
+    if (daysUntilDue <= 7) return {
+      type: 'urgent',
       message: `Vence em ${daysUntilDue} ${daysUntilDue === 1 ? 'dia' : 'dias'}`,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
       borderColor: 'border-orange-200'
     }
-    
-    return { 
-      type: 'normal', 
+
+    return {
+      type: 'normal',
       message: `Vence em ${daysUntilDue} dias`,
       color: 'text-gray-600',
       bgColor: 'bg-gray-50',
@@ -159,8 +157,8 @@ function ClientPaymentsPage({ user }: Props) {
   }
 
   const columns = [
-    { 
-      key: 'planName', 
+    {
+      key: 'planName',
       header: 'Plano',
       render: (_: any, item: PendingPayment) => (
         <div>
@@ -178,8 +176,8 @@ function ClientPaymentsPage({ user }: Props) {
         </div>
       )
     },
-    { 
-      key: 'totalAmount', 
+    {
+      key: 'totalAmount',
       header: 'Valor',
       render: (amount: number, item: PendingPayment) => (
         <div>
@@ -192,8 +190,8 @@ function ClientPaymentsPage({ user }: Props) {
         </div>
       )
     },
-    { 
-      key: 'paymentMethod', 
+    {
+      key: 'paymentMethod',
       header: 'Método',
       render: (method: string) => (
         <div className="flex items-center space-x-2">
@@ -205,8 +203,8 @@ function ClientPaymentsPage({ user }: Props) {
         </div>
       )
     },
-    { 
-      key: 'dueDate', 
+    {
+      key: 'dueDate',
       header: 'Vencimento',
       render: (dueDate: Date | string, item: PendingPayment) => {
         const info = getPaymentInfo(dueDate, item.status)
@@ -268,7 +266,7 @@ function ClientPaymentsPage({ user }: Props) {
     loadData()
   }, [])
 
-  const filterPayments = useCallback(() => {
+  useEffect(() => {
     let filtered = [...payments]
 
     if (searchTerm) {
@@ -288,19 +286,17 @@ function ClientPaymentsPage({ user }: Props) {
       const today = new Date()
       filtered = filtered.filter(payment => {
         const daysUntilDue = getDaysUntilDue(payment.dueDate)
-        
         switch (dateFilter) {
           case 'overdue':
             return daysUntilDue < 0 && payment.status !== 'PAID'
           case 'thisMonth':
-            const paymentDate = typeof payment.dueDate === 'string' ? new Date(payment.dueDate) : payment.dueDate
-            return paymentDate.getMonth() === today.getMonth() && 
-                   paymentDate.getFullYear() === today.getFullYear()
+            const paymentDate = new Date(payment.dueDate)
+            return paymentDate.getMonth() === today.getMonth() &&
+              paymentDate.getFullYear() === today.getFullYear()
           case 'nextMonth':
-            const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1)
-            const paymentDate2 = typeof payment.dueDate === 'string' ? new Date(payment.dueDate) : payment.dueDate
-            return paymentDate2.getMonth() === nextMonth.getMonth() && 
-                   paymentDate2.getFullYear() === nextMonth.getFullYear()
+            const paymentDate2 = new Date(payment.dueDate)
+            return paymentDate2.getMonth() === today.getMonth() + 1 &&
+              paymentDate2.getFullYear() === today.getFullYear()
           case 'paid':
             return payment.status === 'PAID'
           default:
@@ -314,31 +310,27 @@ function ClientPaymentsPage({ user }: Props) {
       if (b.status === 'PENDING' && a.status !== 'PENDING') return 1
       if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1
       if (b.status === 'OVERDUE' && a.status !== 'OVERDUE') return 1
-      
-      const dateA = typeof a.dueDate === 'string' ? new Date(a.dueDate) : a.dueDate
-      const dateB = typeof b.dueDate === 'string' ? new Date(b.dueDate) : b.dueDate
+
+      const dateA = new Date(a.dueDate)
+      const dateB = new Date(b.dueDate)
       return dateA.getTime() - dateB.getTime()
     })
 
     setFilteredPayments(filtered)
     resetToFirstPage()
-  }, [payments, searchTerm, statusFilter, dateFilter, resetToFirstPage])
+  }, [payments, searchTerm, statusFilter, dateFilter])
 
-  useEffect(() => {
-    filterPayments()
-  }, [filterPayments])
 
   async function loadData() {
     setIsLoading(true)
     try {
       const [paymentsData, summaryData] = await Promise.all([
-        getPendingPayments(),
+        getAllPaymentsByClient(), // usa a nova função aqui
         getDetailedPaymentSummary()
       ])
       setPayments(paymentsData)
       setPaymentSummary(summaryData)
     } catch (error) {
-      console.error('Erro ao carregar dados:', error)
       toast.error('Erro ao carregar seus pagamentos')
     } finally {
       setIsLoading(false)
@@ -368,13 +360,11 @@ function ClientPaymentsPage({ user }: Props) {
   // Função para carregar o script do MercadoPago dinamicamente
   const loadMercadoPagoScript = (): Promise<void> => {
     return new Promise((resolve, reject) => {
-      // Verificar se já existe
       if (window.MercadoPago) {
         resolve()
         return
       }
 
-      // Verificar se o script já está sendo carregado
       const existingScript = document.querySelector('script[src*="mercadopago"]')
       if (existingScript) {
         existingScript.addEventListener('load', () => resolve())
@@ -382,7 +372,6 @@ function ClientPaymentsPage({ user }: Props) {
         return
       }
 
-      // Criar e carregar o script
       const script = document.createElement('script')
       script.src = 'https://sdk.mercadopago.com/js/v2'
       script.async = true
@@ -392,22 +381,36 @@ function ClientPaymentsPage({ user }: Props) {
     })
   }
 
+  useEffect(() => {
+    if (!selectedPaymentForPayment?.id) return
+
+    const interval = setInterval(async () => {
+      const data = await getPaymentDetails(selectedPaymentForPayment?.id)
+      console.log('🔄 Verificando status do pagamento:', data)
+
+      if (data.status === 'PAID') {
+        clearInterval(interval)
+        router.refresh()
+      }
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [selectedPaymentForPayment?.id])
+
+
   async function handleGoToPayment() {
     if (!selectedPaymentForPayment) return
 
     setIsLoading(true)
     try {
-      // Verificar variável de ambiente
       const mpPublicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY
       if (!mpPublicKey) {
-        toast.error('Chave do Mercado Pago não configurada')
+        toast.error('Chave pública do Mercado Pago não configurada')
         return
       }
 
-      // Carregar script do MercadoPago se necessário
       await loadMercadoPagoScript()
 
-      // Verificar se MercadoPago está disponível
       if (!window.MercadoPago) {
         toast.error('Mercado Pago não está disponível. Tente novamente.')
         return
@@ -416,84 +419,130 @@ function ClientPaymentsPage({ user }: Props) {
       const preferenceData = {
         items: [
           {
-            title: `Assinatura do plano ${selectedPaymentForPayment.clientPlan.plan.name}`,
+            title: `Assinatura - ${selectedPaymentForPayment.clientPlan.plan.name}`,
             quantity: 1,
             unit_price: selectedPaymentForPayment.totalAmount,
-            currency_id: 'BRL',
-            description: `Pagamento via painel - ${selectedPaymentForPayment.clientPlan.plan.name}`
+            currency_id: 'BRL'
           }
         ],
         payer: {
-          name: user.name?.split(' ')[0] || '',
-          surname: user.name?.split(' ').slice(1).join(' ') || '',
+          name: user.name?.split(' ')[0] || 'Cliente',
+          surname: user.name?.split(' ').slice(1).join(' ') || 'Leiloom',
           email: user.email
         },
         back_urls: {
-          success: `${window.location.origin}/payment-success`,
-          failure: `${window.location.origin}/payment-failure`,
-          pending: `${window.location.origin}/payment-pending`
+          success: `${process.env.NEXT_PUBLIC_MP_URL}/installments-client`,
+          failure: `${process.env.NEXT_PUBLIC_MP_URL}/installments-client`,
+          pending: `${process.env.NEXT_PUBLIC_MP_URL}/installments-client`
         },
-        auto_return: 'approved',
         external_reference: `payment_${selectedPaymentForPayment.id}`,
-        notification_url: `${process.env.NEXT_PUBLIC_API_URL}/payments/webhook`,
+        notification_url: `${process.env.NEXT_PUBLIC_MP_URL}/api/mercadopago/webhook`,
         statement_descriptor: 'Leiloom',
         payment_methods: {
           excluded_payment_types: [],
           excluded_payment_methods: [],
-          installments: selectedPaymentForPayment.installments > 1
-            ? selectedPaymentForPayment.installments
-            : 1
+          installments: selectedPaymentForPayment.clientPlan.plan.maxInstallments || 1
         },
         metadata: {
-          plan_id: selectedPaymentForPayment.clientPlan.plan.name,
+          plan_name: selectedPaymentForPayment.clientPlan.plan.name,
           user_email: user.email,
-          payment_id: selectedPaymentForPayment.id
+          payment_id: selectedPaymentForPayment.id,
+          client_id: user.clientId,
+          installments: selectedPaymentForPayment.clientPlan.plan.maxInstallments || 1,
+          absorb_tax: selectedPaymentForPayment.absorbTax
         }
       }
-
       const response = await fetch('/api/mercadopago/create-preference', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(preferenceData)
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Erro HTTP: ${response.status}`)
+        throw new Error(errorData.details || errorData.error || `Erro HTTP: ${response.status}`)
       }
 
       const { id: preferenceId } = await response.json()
 
-      // Inicializar MercadoPago
+      if (!preferenceId) {
+        throw new Error('ID da preferência não retornado')
+      }
+
       const mp = new window.MercadoPago(mpPublicKey, {
         locale: 'pt-BR'
       })
 
-      // Abrir checkout
+      try {
+        await fetch(`/api/payments/${selectedPaymentForPayment.id}/preference`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preferenceId })
+        }).catch(() => { })
+      } catch (e) { }
+
       mp.checkout({
-        preference: { id: preferenceId },
+        preference: {
+          id: preferenceId
+        },
         autoOpen: true
       })
 
       setIsPaymentModalOpen(false)
     } catch (error: any) {
-      console.error('Erro no pagamento:', error)
-      toast.error(error.message || 'Erro ao iniciar pagamento')
+      toast.error(error.message || 'Erro ao iniciar pagamento. Tente novamente.')
     } finally {
       setIsLoading(false)
     }
   }
-  
+
+  useEffect(() => {
+    const applyHeightFix = () => {
+      document.documentElement.style.height = '100%';
+      document.body.style.height = '100%';
+
+      const root = document.getElementById('root-app');
+      if (root) {
+        root.style.setProperty('height', '100%', 'important');
+      }
+    }
+
+    const addMercadoPagoStyles = () => {
+      const existingStyle = document.getElementById('mp-custom-styles');
+      if (existingStyle) return;
+
+      const style = document.createElement('style');
+      style.id = 'root-app';
+      style.innerHTML = `
+        .layout--modal .layout-main, .layout--modal .layout-main .optimus{
+          height: 200vh !important;
+          min-height: 500px !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    applyHeightFix();
+    addMercadoPagoStyles();
+
+    return () => {
+      document.getElementById('root-app')?.remove();
+    };
+  }, []);
+
   const getQuickStats = () => {
     const total = filteredPayments.length
     const pending = filteredPayments.filter(p => p.status === 'PENDING').length
     const paid = filteredPayments.filter(p => p.status === 'PAID').length
-    const overdue = filteredPayments.filter(p => p.status === 'OVERDUE' || 
+    const overdue = filteredPayments.filter(p => p.status === 'OVERDUE' ||
       (p.status === 'PENDING' && getDaysUntilDue(p.dueDate) < 0)).length
     const totalAmount = filteredPayments.reduce((sum, p) => sum + p.totalAmount, 0)
     const paidAmount = filteredPayments.filter(p => p.status === 'PAID').reduce((sum, p) => sum + p.totalAmount, 0)
     const pendingAmount = filteredPayments.filter(p => p.status === 'PENDING').reduce((sum, p) => sum + p.totalAmount, 0)
-    
+
     return { total, pending, paid, overdue, totalAmount, paidAmount, pendingAmount }
   }
 
@@ -507,7 +556,7 @@ function ClientPaymentsPage({ user }: Props) {
       </Head>
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-6 max-w-7xl">
-          
+
           <div className="mb-6">
             <div className="flex items-center mb-4">
               <button
@@ -533,7 +582,7 @@ function ClientPaymentsPage({ user }: Props) {
                 <p className="text-xl font-bold text-gray-900">{stats.total}</p>
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="text-center">
                 <div className="h-8 w-8 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-2">
@@ -543,7 +592,7 @@ function ClientPaymentsPage({ user }: Props) {
                 <p className="text-xl font-bold text-yellow-600">{stats.pending}</p>
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="text-center">
                 <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
@@ -553,7 +602,7 @@ function ClientPaymentsPage({ user }: Props) {
                 <p className="text-xl font-bold text-green-600">{stats.paid}</p>
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="text-center">
                 <div className="h-8 w-8 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-2">
@@ -563,7 +612,7 @@ function ClientPaymentsPage({ user }: Props) {
                 <p className="text-xl font-bold text-red-600">{stats.overdue}</p>
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="text-center">
                 <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
@@ -573,7 +622,7 @@ function ClientPaymentsPage({ user }: Props) {
                 <p className="text-lg font-bold text-green-600">{formatPrice(stats.paidAmount)}</p>
               </div>
             </div>
-            
+
             <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="text-center">
                 <div className="h-8 w-8 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
@@ -829,7 +878,7 @@ function ClientPaymentsPage({ user }: Props) {
 
                           <div className="space-y-3 mb-6">
                             <h4 className="font-medium text-gray-900">Será redirecionado para:</h4>
-                            
+
                             <div className="p-4 border-2 border-blue-200 rounded-lg bg-blue-50">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
@@ -839,9 +888,9 @@ function ClientPaymentsPage({ user }: Props) {
                                   <div className="text-left">
                                     <div className="font-medium text-gray-900">Mercado Pago</div>
                                     <div className="text-sm text-gray-600">
-                                      {selectedPaymentForPayment.paymentMethod === 'PIX' ? 'Pagamento via PIX' : 
-                                       selectedPaymentForPayment.paymentMethod === 'CREDIT_CARD' ? 'Cartão de Crédito' :
-                                       paymentMethodMap[selectedPaymentForPayment.paymentMethod]}
+                                      {selectedPaymentForPayment.paymentMethod === 'PIX' ? 'Pagamento via PIX' :
+                                        selectedPaymentForPayment.paymentMethod === 'CREDIT_CARD' ? 'Cartão de Crédito' :
+                                          paymentMethodMap[selectedPaymentForPayment.paymentMethod]}
                                     </div>
                                   </div>
                                 </div>

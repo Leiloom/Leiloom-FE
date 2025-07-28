@@ -2,466 +2,408 @@
 
 import { useRegisterClient } from '@/contexts/RegisterClientContext'
 import { loginClient } from '@/services/authService'
-import { createSubscriptionOnly, activateClientPlan } from '@/services/paymentService'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthContext } from '@/contexts/AuthContext'
-import { PaymentMethod } from '@/types/payment'
 import { Plan } from '@/types/plan'
-import { CreditCard, DollarSign, CheckCircle } from 'lucide-react'
+import { CheckCircle, CreditCard, AlertCircle } from 'lucide-react'
+import { 
+  getPaymentDetails 
+} from '@/services/paymentService'
 
 interface StepFivePaymentProps {
-    selectedPlan: Plan
-    onBack: () => void
+  selectedPlan: Plan
+  paymentId: string
+  onBack: () => void
 }
 
-export default function StepFivePayment({ selectedPlan, onBack }: StepFivePaymentProps) {
-    const { formData } = useRegisterClient()
-    const router = useRouter()
-    const [loading, setLoading] = useState(false)
-    const [currentStep, setCurrentStep] = useState(1)
-    const [selectedInstallments, setSelectedInstallments] = useState(1)
-    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('CREDIT_CARD')
-    const { login } = useAuthContext()
+export default function StepFivePayment({ selectedPlan, paymentId, onBack }: StepFivePaymentProps) {
+  const { formData } = useRegisterClient()
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState<'initial' | 'processing' | 'completed' | 'failed'>('initial')
+  const [preferenceId, setPreferenceId] = useState<string | null>(null)
+  const { login } = useAuthContext()
 
-    if (!selectedPlan) {
-        return (
-            <div className="space-y-6">
-                <div className="text-center">
-                    <p className="text-gray-600">Carregando informações do plano...</p>
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto mt-4"></div>
-                </div>
-                <div className="flex justify-between pt-4">
-                    <button
-                        onClick={onBack}
-                        className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-                    >
-                        Voltar
-                    </button>
-                </div>
-            </div>
-        )
+  useEffect(() => {
+    if (selectedPlan && paymentStatus === 'initial') {
+      handlePaymentSubmit()
     }
+  }, [selectedPlan])
 
-    function formatPrice(price: number): string {
-        if (price === 0) return 'Grátis'
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(price)
-    }
-
-    function calculateInstallmentValue(plan: Plan, installments: number): number {
-        return plan.price / installments
-    }
-
-    function getInstallmentOptions(plan: Plan): number[] {
-        if (!plan || !plan.allowInstallments) return [1]
-        const maxInstallments = plan.maxInstallments || 1
-        return Array.from({ length: maxInstallments }, (_, i) => i + 1)
-    }
-
-    async function handlePaymentSubmit() {
-        setLoading(true)
-        try {
-            await new Promise(resolve => setTimeout(resolve, 2000))
-            setCurrentStep(4)
-            setTimeout(async () => {
-                await handleCreateSubscription()
-            }, 2000)
-        } catch (error) {
-            toast.error('Erro no processamento do pagamento')
-            setLoading(false)
-        }
-    }
-
-    async function handleCreateSubscription() {
-        try {
-            const token = await loginClient({
-                login: formData.email,
-                password: formData.password,
-                context: 'CLIENT',
-            })
-
-            login(token, 'CLIENT')
-
-            const subscriptionData = await createSubscriptionOnly({
-                clientId: formData.clientId,
-                planId: selectedPlan.id!,
-                installments: selectedInstallments,
-                paymentMethod: selectedPaymentMethod
-            })
-
-            await activateClientPlan(subscriptionData.payment.clientPlanId)
-
-
-            router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'created'}`)
-        } catch (err: any) {
-            console.error('Erro no registro:', err)
-            toast.error(err?.message || 'Erro ao concluir o cadastro.')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const renderStep1 = () => (
-        <div className="space-y-6">
-            <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    Faça sua escolha
-                </h2>
-                <p className="text-gray-600">
-                    Como você gostaria de pagar seu plano {selectedPlan.name}?
-                </p>
-            </div>
-
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h3 className="font-semibold text-yellow-800 mb-2">{selectedPlan.name}</h3>
-                <p className="text-sm text-yellow-700 mb-2">
-                    {selectedPlan.description}
-                </p>
-                <div className="text-sm text-yellow-700">
-                    <strong>Preço:</strong> {formatPrice(selectedPlan.price)}
-                    {selectedPlan.absorbTax && selectedPlan.allowInstallments && (
-                        <p className="text-xs mt-1 text-yellow-600">
-                            Taxa do Mercado Pago já incluída no preço
-                        </p>
-                    )}
-                    {!selectedPlan.absorbTax && selectedPlan.allowInstallments && (
-                        <p className="text-xs mt-1 text-yellow-600">
-                            Taxa do Mercado Pago será adicionada no checkout
-                        </p>
-                    )}
-                </div>
-            </div>
-
-            {selectedPlan.allowInstallments ? (
-                <div className="space-y-4">
-                    <div>
-                        <label htmlFor="installments" className="block text-sm font-medium text-gray-700 mb-1">
-                            Selecione o número de parcelas:
-                        </label>
-                        <select
-                            id="installments"
-                            name="installments"
-                            value={selectedInstallments || ''}
-                            onChange={(e) => setSelectedInstallments(parseInt(e.target.value))}
-                            className="w-full p-2 border border-gray-300 rounded-md text-gray-700 focus:ring-yellow-500 focus:border-yellow-500"
-                        >
-                            <option value="" disabled>
-                                Selecione o número de parcelas
-                            </option>
-                            {getInstallmentOptions(selectedPlan).map((installment) => (
-                                <option key={installment} value={installment}>
-                                    {installment}x de {formatPrice(calculateInstallmentValue(selectedPlan, installment))}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {selectedInstallments > 1 && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <div className="text-sm text-blue-700">
-                                <strong>Resumo do parcelamento:</strong>
-                                <br />
-                                {selectedInstallments}x de {formatPrice(calculateInstallmentValue(selectedPlan, selectedInstallments))} = {formatPrice(selectedPlan.price)}
-                                {!selectedPlan.absorbTax && (
-                                    <p className="text-orange-600 text-xs mt-1">
-                                        * Taxa do Mercado Pago será adicionada no pagamento
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            ) : (
-                <div className="text-center py-8">
-                    <div className="text-3xl font-bold text-gray-900">
-                        {formatPrice(selectedPlan.price)}
-                    </div>
-                    <p className="text-gray-600 mt-2">Pagamento único</p>
-                    {!selectedPlan.absorbTax && (
-                        <p className="text-orange-600 text-xs mt-1">
-                            * Taxa do Mercado Pago será adicionada no pagamento
-                        </p>
-                    )}
-                </div>
-            )}
-
-            <div className="flex justify-between pt-4">
-                <button
-                    onClick={onBack}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-                >
-                    Voltar
-                </button>
-                <button
-                    onClick={() => setCurrentStep(2)}
-                    className="px-6 py-2 rounded-lg bg-yellow-400 text-black hover:bg-yellow-300 transition"
-                >
-                    Continuar
-                </button>
-            </div>
-        </div>
-    )
-
-    const renderStep2 = () => {
-        const installmentValue = calculateInstallmentValue(selectedPlan, selectedInstallments)
-
-        return (
-            <div className="space-y-6">
-                <div className="text-center">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                        Método de Pagamento
-                    </h2>
-                    <p className="text-gray-600">
-                        Como você gostaria de pagar?
-                    </p>
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                        <span className="text-gray-700">
-                            {selectedInstallments === 1 ? 'À vista:' : `${selectedInstallments}x de:`}
-                        </span>
-                        <span className="font-bold text-xl text-black">
-                            {selectedInstallments === 1 ? formatPrice(selectedPlan.price) : formatPrice(installmentValue)}
-                        </span>
-                    </div>
-                    {selectedInstallments > 1 && (
-                        <div className="flex items-center justify-between text-sm mt-2">
-                            <span className="text-gray-600">Total:</span>
-                            <span className="font-medium text-black">
-                                {formatPrice(selectedPlan.price)}
-                            </span>
-                        </div>
-                    )}
-                    {!selectedPlan.absorbTax && (
-                        <p className="text-xs text-orange-600 mt-2">
-                            * Taxa do Mercado Pago será calculada no checkout
-                        </p>
-                    )}
-                </div>
-
-                <div className="space-y-3">
-                    <label className="text-sm font-medium text-gray-700">
-                        Escolha seu método de pagamento:
-                    </label>
-
-                    <div className="space-y-3">
-                        <button
-                            type="button"
-                            onClick={() => setSelectedPaymentMethod('CREDIT_CARD')}
-                            className={`w-full p-4 border rounded-lg text-left transition ${selectedPaymentMethod === 'CREDIT_CARD'
-                                ? 'border-yellow-500 bg-yellow-50'
-                                : 'border-gray-300 hover:border-gray-400'
-                                }`}
-                        >
-                            <div className="flex items-center space-x-3">
-                                <CreditCard className="h-6 w-6 text-gray-600" />
-                                <div>
-                                    <p className="font-medium text-gray-900">Cartão de Crédito</p>
-                                    <p className="text-sm text-gray-600">
-                                        {selectedInstallments > 1 ? 'Parcelamento no cartão' : 'Pagamento único'}
-                                    </p>
-                                </div>
-                            </div>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setSelectedPaymentMethod('PIX')}
-                            className={`w-full p-4 border rounded-lg text-left transition ${selectedPaymentMethod === 'PIX'
-                                ? 'border-yellow-500 bg-yellow-50'
-                                : 'border-gray-300 hover:border-gray-400'
-                                }`}
-                        >
-                            <div className="flex items-center space-x-3">
-                                <DollarSign className="h-6 w-6 text-gray-600" />
-                                <div>
-                                    <p className="font-medium text-gray-900">PIX</p>
-                                    <p className="text-sm text-gray-600">
-                                        {selectedInstallments > 1 ? 'Será gerado um PIX por parcela' : 'Pagamento instantâneo'}
-                                    </p>
-                                </div>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-
-                <div className="flex justify-between pt-4">
-                    <button
-                        onClick={() => setCurrentStep(1)}
-                        className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-                    >
-                        Voltar
-                    </button>
-                    <button
-                        onClick={() => setCurrentStep(3)}
-                        className="px-6 py-2 rounded-lg bg-yellow-400 text-black hover:bg-yellow-300 transition"
-                    >
-                        Continuar
-                    </button>
-                </div>
-            </div>
-        )
-    }
-
-    const renderStep3 = () => {
-        const installmentValue = calculateInstallmentValue(selectedPlan, selectedInstallments)
-
-        return (
-            <div className="space-y-6">
-                <div className="text-center">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                        {selectedPaymentMethod === 'CREDIT_CARD' ? 'Dados do Cartão' : 'Pagamento via PIX'}
-                    </h2>
-                    <p className="text-gray-600">
-                        {selectedPaymentMethod === 'CREDIT_CARD'
-                            ? 'Seus dados serão processados pelo Mercado Pago'
-                            : 'Você será redirecionado para o Mercado Pago'
-                        }
-                    </p>
-                </div>
-
-                {selectedPaymentMethod === 'CREDIT_CARD' ? (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Número do Cartão
-                            </label>
-                            <input
-                                type="text"
-                                placeholder="1234 5678 9012 3456"
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Validade
-                                </label>
-                                <input
-                                    type="text"
-                                    placeholder="MM/AA"
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    CVV
-                                </label>
-                                <input
-                                    type="text"
-                                    placeholder="123"
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Nome no Cartão
-                            </label>
-                            <input
-                                type="text"
-                                placeholder="João Silva"
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500"
-                            />
-                        </div>
-                    </div>
-                ) : (
-                    <div className="text-center space-y-4">
-                        <div className="bg-gray-100 rounded-lg p-8">
-                            <div className="w-48 h-48 bg-white border-2 border-dashed border-gray-300 rounded-lg mx-auto flex items-center justify-center">
-                                <p className="text-gray-500">Você será redirecionado</p>
-                            </div>
-                        </div>
-
-                        <p className="text-sm text-gray-600">
-                            Valor: <strong>{selectedInstallments === 1 ? formatPrice(selectedPlan.price) : formatPrice(installmentValue)}</strong>
-                        </p>
-                        
-                        {selectedInstallments > 1 && (
-                            <p className="text-xs text-blue-600">
-                                ℹ️ Será gerado um pagamento PIX por parcela
-                            </p>
-                        )}
-                    </div>
-                )}
-
-                <div className="flex justify-between pt-4">
-                    <button
-                        onClick={() => setCurrentStep(2)}
-                        className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-                    >
-                        Voltar
-                    </button>
-                    <button
-                        onClick={handlePaymentSubmit}
-                        disabled={loading}
-                        className={`px-6 py-2 rounded-lg transition ${loading
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            : 'bg-yellow-400 text-black hover:bg-yellow-300'
-                            }`}
-                    >
-                        {loading ? 'Processando...' : 'Finalizar Pagamento'}
-                    </button>
-                </div>
-            </div>
-        )
-    }
-
-    const renderStep4 = () => (
-        <div className="text-center space-y-6">
-            <div className="flex justify-center">
-                <CheckCircle className="h-16 w-16 text-green-500" />
-            </div>
-
-            <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    Pagamento Criado!
-                </h2>
-                <p className="text-gray-600">
-                    Seu pagamento foi registrado. Aguardando confirmação do Mercado Pago...
-                </p>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-800 mb-2">
-                    {selectedPlan.name}
-                </h3>
-                <p className="text-sm text-blue-700">
-                    Plano será ativado após confirmação do pagamento
-                </p>
-            </div>
-
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto"></div>
-        </div>
-    )
-
+  if (!selectedPlan) {
     return (
-        <div className="space-y-6">
-            <div className="flex justify-center space-x-2 mb-8">
-                {[1, 2, 3, 4].map((step) => (
-                    <div
-                        key={step}
-                        className={`w-3 h-3 rounded-full ${step === currentStep
-                            ? 'bg-yellow-400'
-                            : step < currentStep
-                                ? 'bg-green-500'
-                                : 'bg-gray-300'
-                            }`}
-                    />
-                ))}
-            </div>
-
-            {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && renderStep3()}
-            {currentStep === 4 && renderStep4()}
+      <div className="space-y-6">
+        <div className="text-center">
+          <p className="text-gray-600">Carregando informações do plano...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto mt-4"></div>
         </div>
+        <div className="flex justify-between pt-4">
+          <button
+            onClick={onBack}
+            className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
+          >
+            Voltar
+          </button>
+        </div>
+      </div>
     )
+  }
+
+  function formatPrice(price: number): string {
+    if (price === 0) return 'Grátis'
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(price)
+  }
+
+  useEffect(() => {
+  if (!paymentId) {
+    console.log('🔄 Verificando status do pagamento: pagamentoId não encontrado')
+    return
+  } 
+
+  const interval = setInterval(async () => {
+    const data = await getPaymentDetails(paymentId)
+    console.log('🔄 Verificando status do pagamento:', data)
+
+    if (data.status === 'PAID') {
+      clearInterval(interval)
+      console.log('✅ Pagamento aprovado:', data)
+      router.push('/dashboard-client')
+      router.refresh()
+    }
+  }, 5000)
+
+  return () => clearInterval(interval)
+}, [paymentId])
+
+
+  function loadMercadoPagoScript(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (window.MercadoPago) {
+        resolve()
+        return
+      }
+      const existingScript = document.querySelector('script[src*="mercadopago"]')
+      if (existingScript) {
+        existingScript.addEventListener('load', () => resolve())
+        existingScript.addEventListener('error', () => reject(new Error('Erro ao carregar MercadoPago')))
+        return
+      }
+      const script = document.createElement('script')
+      script.src = 'https://sdk.mercadopago.com/js/v2'
+      script.async = true
+      script.onload = () => resolve()
+      script.onerror = () => reject(new Error('Erro ao carregar MercadoPago'))
+      document.head.appendChild(script)
+    })
+  }
+
+  async function createPreference() {
+    const preferencePayload = {
+      items: [{
+        title: `Assinatura - ${selectedPlan.name}`,
+        quantity: 1,
+        unit_price: selectedPlan.price,
+        currency_id: 'BRL'
+      }],
+      payer: {
+        name: formData.companyName || 'Cliente',
+        email: formData.email
+      },
+      back_urls: {
+        success: `${process.env.NEXT_PUBLIC_MP_URL}/dashboard-client`,
+        failure: `${process.env.NEXT_PUBLIC_MP_URL}/dashboard-client`,
+        pending: `${process.env.NEXT_PUBLIC_MP_URL}/dashboard-client`
+      },
+      external_reference: `payment_${paymentId}`,
+      notification_url: `${process.env.NEXT_PUBLIC_MP_URL}/api/mercadopago/webhook`,
+      statement_descriptor: 'Leiloom',
+      payment_methods: {
+        installments: selectedPlan.maxInstallments || 1
+      },
+      metadata: {
+        plan_name: selectedPlan.name,
+        user_email: formData.email,
+        client_id: formData.clientId,
+        plan_id: selectedPlan.id,
+        absorb_tax: selectedPlan.absorbTax
+      }
+    }
+
+    const response = await fetch('/api/mercadopago/create-preference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(preferencePayload)
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Erro ao criar pagamento.')
+    }
+
+    const { id } = await response.json()
+    return id
+  }
+
+  async function openMercadoPagoCheckout(prefId: string) {
+    const mpPublicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY
+
+    if (!window.MercadoPago || !mpPublicKey) {
+      throw new Error('Mercado Pago não está disponível')
+    }
+
+    const mp = new window.MercadoPago(mpPublicKey, { locale: 'pt-BR' })
+
+    // Configurações para aumentar o popup
+    const checkoutConfig = {
+      preference: { id: prefId },
+      autoOpen: true,
+      theme: {
+        elementsColor: '#fbbf24',
+        headerColor: '#fbbf24'
+      },
+      modal: {
+        width: '600px',
+        height: '100%',
+        maxHeight: '700px'
+      }
+    }
+
+    mp.checkout(checkoutConfig)
+  }
+
+  useEffect(() => {
+    const applyHeightFix = () => {
+      document.documentElement.style.height = '100%';
+      document.body.style.height = '100%';
+
+      const root = document.getElementById('root-app');
+      if (root) {
+        root.style.setProperty('height', '100%', 'important');
+      }
+    }
+
+    const addMercadoPagoStyles = () => {
+      const existingStyle = document.getElementById('mp-custom-styles');
+      if (existingStyle) return;
+
+      const style = document.createElement('style');
+      style.id = 'mp-custom-styles';
+      style.innerHTML = `
+      .layout-main .mp-checkout-pro,
+      .layout-main .mp-checkout-modal {
+        height: 80vh !important;
+        max-height: 700px !important;
+        min-height: 500px !important;
+      }
+
+      .layout-main iframe[src*="mercadopago"] {
+        height: 80vh !important;
+        max-height: 700px !important;
+        min-height: 500px !important;
+      }
+    `;
+      document.head.appendChild(style);
+    }
+
+    applyHeightFix();
+    addMercadoPagoStyles();
+
+    return () => {
+      document.getElementById('mp-custom-styles')?.remove();
+    };
+  }, []);
+
+
+  async function handlePaymentSubmit() {
+    if (loading) return
+
+    setLoading(true)
+    setPaymentStatus('processing')
+
+    try {
+      await loadMercadoPagoScript()
+
+      // Se já temos um preferenceId, reutilizar
+      let prefId = preferenceId
+      if (!prefId) {
+        prefId = await createPreference()
+        setPreferenceId(prefId)
+      }
+
+      await openMercadoPagoCheckout(prefId || '')
+
+      setTimeout(() => {
+        if (paymentStatus === 'processing') {
+          setPaymentStatus('failed')
+        }
+      }, 3000)
+
+    } catch (error: any) {
+      console.error('Erro no pagamento:', error)
+      toast.error(error.message || 'Erro ao iniciar pagamento')
+      setPaymentStatus('failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderInitialOrProcessing = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          {paymentStatus === 'initial' ? 'Preparando pagamento...' : 'Aguardando pagamento'}
+        </h2>
+        <p className="text-gray-600">
+          {paymentStatus === 'initial'
+            ? 'Carregando Mercado Pago...'
+            : 'Complete o pagamento na janela do Mercado Pago que foi aberta.'
+          }
+        </p>
+      </div>
+
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+        <div className="flex items-start space-x-4">
+          <CreditCard className="h-8 w-8 text-yellow-600 mt-1" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-yellow-800 mb-2">{selectedPlan.name}</h3>
+            <p className="text-sm text-yellow-700 mb-3">
+              {selectedPlan.description}
+            </p>
+            <div className="text-2xl font-bold text-gray-900 mb-2">
+              {formatPrice(selectedPlan.price)}
+            </div>
+            {selectedPlan.maxInstallments || 1 > 1 && (
+              <p className="text-sm text-gray-600">
+                Até {selectedPlan.maxInstallments}x no cartão
+              </p>
+            )}
+            {!selectedPlan.absorbTax && (
+              <p className="text-xs text-orange-600 mt-2">
+                * Taxa do Mercado Pago pode ser adicionada conforme método escolhido
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {paymentStatus === 'processing' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
+          <p className="text-blue-800 font-medium">Processando pagamento...</p>
+          <p className="text-blue-600 text-sm">
+            Se a janela do Mercado Pago não abriu ou você a fechou, clique em "Tentar Novamente"
+          </p>
+        </div>
+      )}
+
+      <div className="flex justify-between pt-4">
+        <button
+          onClick={onBack}
+          disabled={loading}
+          className="px-4 py-2 text-gray-600 hover:text-gray-800 transition disabled:opacity-50"
+        >
+          Voltar
+        </button>
+
+        {paymentStatus === 'processing' && (
+          <button
+            onClick={handlePaymentSubmit}
+            disabled={loading}
+            className={`px-6 py-2 rounded-lg transition ${loading
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-yellow-400 text-black hover:bg-yellow-300'
+              }`}
+          >
+            {loading ? 'Abrindo...' : 'Tentar Novamente'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+
+  const renderFailed = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="flex justify-center mb-4">
+          <AlertCircle className="h-16 w-16 text-orange-500" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          Pagamento Pendente
+        </h2>
+        <p className="text-gray-600">
+          Parece que o pagamento não foi concluído. Você pode tentar novamente.
+        </p>
+      </div>
+
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+        <h3 className="font-semibold text-orange-800 mb-2">
+          {selectedPlan.name}
+        </h3>
+        <div className="text-2xl font-bold text-gray-900">
+          {formatPrice(selectedPlan.price)}
+        </div>
+      </div>
+
+      <div className="flex justify-between pt-4">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
+        >
+          Voltar
+        </button>
+        <button
+          onClick={handlePaymentSubmit}
+          disabled={loading}
+          className={`px-6 py-2 rounded-lg transition ${loading
+            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            : 'bg-yellow-400 text-black hover:bg-yellow-300'
+            }`}
+        >
+          {loading ? 'Abrindo...' : 'Tentar Pagamento'}
+        </button>
+      </div>
+    </div>
+  )
+
+  const renderCompleted = () => (
+    <div className="text-center space-y-6">
+      <div className="flex justify-center">
+        <CheckCircle className="h-16 w-16 text-green-500" />
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          Pagamento Criado!
+        </h2>
+        <p className="text-gray-600">
+          Seu pagamento foi registrado. Aguardando confirmação do Mercado Pago...
+        </p>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="font-semibold text-blue-800 mb-2">
+          {selectedPlan.name}
+        </h3>
+        <p className="text-sm text-blue-700">
+          Plano será ativado após confirmação do pagamento
+        </p>
+      </div>
+
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto"></div>
+    </div>
+  )
+
+  return (
+    <div className="space-y-6">
+      {(paymentStatus === 'initial' || paymentStatus === 'processing') && renderInitialOrProcessing()}
+      {paymentStatus === 'failed' && renderFailed()}
+      {paymentStatus === 'completed' && renderCompleted()}
+    </div>
+  )
 }
+

@@ -6,6 +6,25 @@ export interface ClientPlan {
   planId: string
   current?: boolean
   createdOn?: string
+  // Relacionamentos que podem vir do backend
+  plan?: {
+    id: string
+    name: string
+    price: number
+    durationDays: number
+    numberOfUsers: number
+    isTrial: boolean
+    allowInstallments: boolean
+    maxInstallments: number
+    absorbTax: boolean
+  }
+  periods?: {
+    id: string
+    startsAt: Date
+    expiresAt: Date
+    isTrial: boolean
+    isCurrent: boolean
+  }[]
 }
 
 export interface CreateClientPlanDto {
@@ -31,7 +50,7 @@ export async function createClientPlan(data: CreateClientPlanDto): Promise<Clien
 }
 
 /**
- * Lista todas as associações cliente-plano
+ * Lista planos do usuário logado (front-office)
  */
 export async function getAllClientPlans(): Promise<ClientPlan[]> {
   try {
@@ -40,6 +59,45 @@ export async function getAllClientPlans(): Promise<ClientPlan[]> {
   } catch (error: any) {
     console.error('Erro ao buscar associações cliente-plano:', error)
     return Promise.reject({ message: 'Erro ao listar associações cliente-plano.' })
+  }
+}
+
+/**
+ * Lista TODOS os planos (admin back-office)
+ */
+export async function getAllClientPlansAdmin(): Promise<ClientPlan[]> {
+  try {
+    const response = await api.get('/client-plans/all')
+    return response?.data
+  } catch (error: any) {
+    console.error('Erro ao buscar todas as associações cliente-plano:', error)
+    return Promise.reject({ message: 'Erro ao listar todas as associações cliente-plano.' })
+  }
+}
+
+/**
+ * Busca plano atual do cliente logado
+ */
+export async function getCurrentClientPlan(): Promise<ClientPlan | null> {
+  try {
+    const response = await api.get('/client-plans/current')
+    return response.data
+  } catch (error: any) {
+    console.error('Erro ao buscar plano atual:', error)
+    return null
+  }
+}
+
+/**
+ * Busca histórico de planos do cliente logado
+ */
+export async function getClientPlanHistory(): Promise<ClientPlan[]> {
+  try {
+    const response = await api.get('/client-plans/history')
+    return response?.data || []
+  } catch (error: any) {
+    console.error('Erro ao buscar histórico de planos:', error)
+    return []
   }
 }
 
@@ -66,6 +124,19 @@ export async function updateClientPlan(id: string, data: UpdateClientPlanDto): P
   } catch (error: any) {
     console.error('Erro ao atualizar associação cliente-plano:', error)
     return Promise.reject({ message: 'Erro ao atualizar associação cliente-plano.' })
+  }
+}
+
+/**
+ * Ativa um plano manualmente (admin)
+ */
+export async function activateClientPlan(id: string): Promise<ClientPlan> {
+  try {
+    const response = await api.patch(`/client-plans/${id}/activate`)
+    return response.data
+  } catch (error: any) {
+    console.error('Erro ao ativar plano:', error)
+    return Promise.reject({ message: 'Erro ao ativar plano.' })
   }
 }
 

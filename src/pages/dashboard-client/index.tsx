@@ -456,7 +456,7 @@ function DashboardClient({ user }: Props) {
                                 'bg-green-100 text-green-800'
                             }`}>
                             {daysUntilDue < 0 ? 'Vencido' :
-                              daysUntilDue <= 7 ? 'Urgente' : 'Em dia'}
+                              daysUntilDue <= 7 ? 'Necessário pagamento' : 'Em dia'}
                           </span>
                         </div>
                       </div>

@@ -31,20 +31,32 @@ export interface ClientDashboardData {
 
 export async function getClientDashboardData(): Promise<ClientDashboardData> {
   try {
-    const currentPlanResponse = await api.get('/client-plans/current')
-    const currentPlan = currentPlanResponse.data
+    const [
+      currentPlanResponse,
+      planHistoryResponse,
+      paymentSummary
+    ] = await Promise.allSettled([
+      api.get('/client-plans/current'),
+      api.get('/client-plans/history'),
+      getDetailedPaymentSummary()
+    ])
 
-    const currentPeriodResponse = await api.get('/client-period-plans/current')
-    const currentPeriod = currentPeriodResponse.data
+    const currentPlan = currentPlanResponse.status === 'fulfilled' ? currentPlanResponse.value.data : null
 
-    const planHistoryResponse = await api.get('/client-plans/history')
-    const planHistory = planHistoryResponse.data
+    const planHistory = planHistoryResponse.status === 'fulfilled' ? planHistoryResponse.value.data : []
 
-    let paymentSummary = null
-    try {
-      paymentSummary = await getDetailedPaymentSummary()
-    } catch (error) {
-      console.warn('Erro ao buscar resumo de pagamentos:', error)
+    const paymentSummaryData = paymentSummary.status === 'fulfilled' ? paymentSummary.value : null
+
+    let currentPeriod = null
+    if (paymentSummaryData?.currentPlan?.period) {
+      currentPeriod = {
+        id: `period-${Date.now()}`,
+        startsAt: paymentSummaryData.currentPlan.period.startsAt,
+        expiresAt: paymentSummaryData.currentPlan.period.expiresAt,
+        isTrial: paymentSummaryData.currentPlan.period.isTrial,
+        wasConfirmed: true,
+        isCurrent: true
+      }
     }
 
     const processedCurrentPlan = currentPlan ? {
@@ -72,17 +84,44 @@ export async function getClientDashboardData(): Promise<ClientDashboardData> {
       wasActive: item.current
     }))
 
-    const accountStatus = determineAccountStatus(processedCurrentPlan, processedCurrentPeriod)
+    const accountStatus = determineAccountStatus(
+      processedCurrentPlan,
+      processedCurrentPeriod,
+      paymentSummaryData
+    )
 
     return {
       currentPlan: processedCurrentPlan,
       currentPeriod: processedCurrentPeriod,
       planHistory: processedPlanHistory,
-      paymentSummary,
+      paymentSummary: paymentSummaryData,
       accountStatus
     }
   } catch (error: any) {
+    console.error('❌ Erro crítico ao carregar dashboard:', error)
     return handleAuthError(error, 'Erro ao carregar dados do dashboard.')
+  }
+}
+
+export async function getCurrentClientPeriod() {
+  try {
+    const paymentSummary = await getDetailedPaymentSummary()
+    if (paymentSummary?.currentPlan?.period) {
+      const period = {
+        id: `period-${Date.now()}`,
+        startsAt: paymentSummary.currentPlan.period.startsAt,
+        expiresAt: paymentSummary.currentPlan.period.expiresAt,
+        daysRemaining: calculateDaysRemaining(paymentSummary.currentPlan.period.expiresAt),
+        isTrial: paymentSummary.currentPlan.period.isTrial,
+        wasConfirmed: true,
+        isCurrent: true
+      }
+      return period
+    }
+    return null
+  } catch (error: any) {
+    console.error('❌ Erro ao buscar período atual:', error)
+    return handleAuthError(error, 'Erro ao buscar período atual.')
   }
 }
 
@@ -105,35 +144,14 @@ export async function getCurrentClientPlan() {
       createdOn: new Date(data.createdOn)
     }
   } catch (error: any) {
+    console.error('❌ Erro ao buscar plano atual:', error)
     return handleAuthError(error, 'Erro ao buscar plano atual.')
-  }
-}
-
-export async function getCurrentClientPeriod() {
-  try {
-    const response = await api.get('/client-period-plans/current')
-    const data = response.data
-    
-    if (!data) return null
-    
-    return {
-      id: data.id,
-      startsAt: new Date(data.startsAt),
-      expiresAt: new Date(data.expiresAt),
-      daysRemaining: calculateDaysRemaining(new Date(data.expiresAt)),
-      isTrial: data.isTrial,
-      wasConfirmed: data.wasConfirmed,
-      isCurrent: data.isCurrent
-    }
-  } catch (error: any) {
-    return handleAuthError(error, 'Erro ao buscar período atual.')
   }
 }
 
 export async function getClientPlanHistory() {
   try {
     const response = await api.get('/client-plans/history')
-    
     return response.data.map((item: any) => ({
       id: item.id,
       planName: item.plan.name,
@@ -154,33 +172,32 @@ export async function getClientPlanHistory() {
       })) || []
     }))
   } catch (error: any) {
+    console.error('❌ Erro ao buscar histórico:', error)
     return handleAuthError(error, 'Erro ao buscar histórico de planos.')
   }
 }
 
 function calculateDaysRemaining(expirationDate: Date): number {
   const now = new Date()
-  const diffTime = expirationDate.getTime() - now.getTime()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const expiry = new Date(expirationDate.getFullYear(), expirationDate.getMonth(), expirationDate.getDate())
+  
+  const diffTime = expiry.getTime() - today.getTime()
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-  return Math.max(0, diffDays)
+  
+  return diffDays
 }
 
 function determineAccountStatus(
-  currentPlan: any, 
-  currentPeriod: any
+  currentPlan: any,
+  currentPeriod: any,
+  paymentSummary: DetailedPaymentSummary | null
 ): 'ACTIVE' | 'PENDING' | 'EXPIRED' | 'INACTIVE' {
-  if (!currentPlan || !currentPeriod) {
-    return 'INACTIVE'
-  }
-
-  if (currentPeriod.daysRemaining <= 0) {
-    return 'EXPIRED'
-  }
-
-  if (!currentPeriod.wasConfirmed && !currentPeriod.isTrial) {
-    return 'PENDING'
-  }
-
+  if (!currentPlan) return 'INACTIVE'
+  if (!currentPeriod) return 'ACTIVE'
+  if (currentPeriod.daysRemaining < 0) return 'EXPIRED'
+  if (paymentSummary && paymentSummary.overdueAmount > 0) return 'PENDING'
+  if (!currentPeriod.wasConfirmed && !currentPeriod.isTrial) return 'PENDING'
   return 'ACTIVE'
 }
 
@@ -224,7 +241,7 @@ export async function getClientStats() {
     
     return {
       hasActivePlan: !!dashboardData.currentPlan,
-      isTrialUser: dashboardData.currentPlan?.isTrial || false,
+      isTrialUser: dashboardData.currentPeriod?.isTrial || false,
       daysUntilExpiration: dashboardData.currentPeriod?.daysRemaining || 0,
       totalPlansUsed: dashboardData.planHistory.length,
       accountStatus: dashboardData.accountStatus,
@@ -254,13 +271,15 @@ export async function getDashboardAlerts() {
     const dashboardData = await getClientDashboardData()
     const alerts = []
 
-    if (dashboardData.currentPeriod && dashboardData.currentPeriod.daysRemaining <= 7) {
+    if (dashboardData.currentPeriod && 
+        dashboardData.currentPeriod.daysRemaining <= 7 && 
+        dashboardData.currentPeriod.daysRemaining > 0) {
       alerts.push({
         type: 'warning' as const,
-        title: 'Plano expirando em breve',
-        message: `Seu plano expira em ${dashboardData.currentPeriod.daysRemaining} dias. Renove para manter o acesso.`,
-        action: 'renew',
-        priority: 1
+        title: dashboardData.currentPeriod.isTrial ? 'Trial expirando' : 'Plano expirando em breve',
+        message: `${dashboardData.currentPeriod.isTrial ? 'Seu trial' : 'Seu plano'} expira em ${dashboardData.currentPeriod.daysRemaining} ${dashboardData.currentPeriod.daysRemaining === 1 ? 'dia' : 'dias'}.`,
+        action: dashboardData.currentPeriod.isTrial ? 'choose-plan' : 'renew',
+        priority: dashboardData.currentPeriod.isTrial ? 1 : 2
       })
     }
 
@@ -268,7 +287,7 @@ export async function getDashboardAlerts() {
       alerts.push({
         type: 'error' as const,
         title: 'Pagamento em atraso',
-        message: `Você possui R$ ${dashboardData.paymentSummary.overdueAmount.toFixed(2)} em atraso.`,
+        message: `Você possui ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dashboardData.paymentSummary.overdueAmount)} em atraso.`,
         action: 'pay',
         priority: 0
       })
@@ -290,11 +309,11 @@ export async function getDashboardAlerts() {
         dashboardData.paymentSummary.nextDueDate && 
         dashboardData.paymentSummary.nextPaymentAmount > 0) {
       const daysUntilPayment = calculateDaysRemaining(dashboardData.paymentSummary.nextDueDate)
-      if (daysUntilPayment <= 3) {
+      if (daysUntilPayment <= 3 && daysUntilPayment > 0) {
         alerts.push({
           type: 'warning' as const,
           title: 'Próximo pagamento',
-          message: `Pagamento de R$ ${dashboardData.paymentSummary.nextPaymentAmount.toFixed(2)} vence em ${daysUntilPayment} dias.`,
+          message: `Pagamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dashboardData.paymentSummary.nextPaymentAmount)} vence em ${daysUntilPayment} ${daysUntilPayment === 1 ? 'dia' : 'dias'}.`,
           action: 'view-payment',
           priority: 2
         })

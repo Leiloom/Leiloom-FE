@@ -3,7 +3,7 @@ import Head from 'next/head'
 import { useState } from 'react'
 import { RegisterClientProvider } from '@/contexts/RegisterClientContext'
 import StepOneForm from './StepOneForm'
-import StepTwoEmailCode from './StepTwoEmailCode' 
+import StepTwoEmailCode from './StepTwoEmailCode'
 import StepThreeDetails from './StepThreeDetails'
 import StepFourPlans from './StepFourPlans'
 import StepFivePayment from './StepFivePayment'
@@ -23,6 +23,8 @@ export default function RegisterClientPage() {
 function WizardContent() {
   const [step, setStep] = useState(1)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+  const [paymentId, setPaymentId] = useState<string | null>(null)
+
 
   function handleNextStep() {
     setStep(prev => prev + 1)
@@ -32,12 +34,14 @@ function WizardContent() {
     setStep(prev => prev - 1)
   }
 
-function handlePlanSelected(plan: Plan) {
-  setSelectedPlan(plan)
-  if (!plan.isTrial) {
-    setStep(5)
+  function handlePlanSelected(plan: Plan, paymentId?: string) {
+    setSelectedPlan(plan)
+    if (paymentId) setPaymentId(paymentId)
+    if (!plan.isTrial) {
+      setStep(5)
+    }
   }
-}
+
 
   // Volta do step 5 para step 4
   function handleBackToPlans() {
@@ -65,30 +69,29 @@ function handlePlanSelected(plan: Plan) {
           {step === 2 && <StepTwoEmailCode onNext={() => setStep(3)} onBack={() => setStep(1)} />}
           {step === 3 && <StepThreeDetails onNext={() => setStep(4)} />}
           {step === 4 && (
-            <StepFourPlans 
-              onBack={() => setStep(3)} 
+            <StepFourPlans
+              onBack={() => setStep(3)}
               onNext={handlePlanSelected}
             />
           )}
-          {step === 5 && selectedPlan && (
-            <StepFivePayment 
+          {step === 5 && selectedPlan && paymentId && (
+            <StepFivePayment
               selectedPlan={selectedPlan}
+              paymentId={paymentId}
               onBack={handleBackToPlans}
             />
           )}
-
           <div className="flex justify-center mt-6">
             <div className="flex space-x-2">
               {[1, 2, 3, 4, 5].map((s) => (
                 <div
                   key={s}
-                  className={`w-3 h-3 rounded-full ${
-                    s === step 
-                      ? 'bg-yellow-400' 
-                      : s < step 
-                      ? 'bg-green-500' 
-                      : 'bg-gray-300'
-                  }`}
+                  className={`w-3 h-3 rounded-full ${s === step
+                      ? 'bg-yellow-400'
+                      : s < step
+                        ? 'bg-green-500'
+                        : 'bg-gray-300'
+                    }`}
                 />
               ))}
             </div>

@@ -11,7 +11,7 @@ import { createSubscriptionOnly } from '@/services/paymentService'
 
 interface StepFourPlansProps {
   onBack: () => void
-  onNext?: (selectedPlan: Plan) => void
+  onNext?: (selectedPlan: Plan, paymentId: string) => void
 }
 
 export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
@@ -77,57 +77,68 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
     return features
   }
 
-
-
-  function handleContinue() {
+  async function handleContinue() {
     if (!selectedPlan) {
       toast.error('Selecione um plano para continuar.')
       return
     }
     if (selectedPlan.isTrial) {
-      handleTrialFinish()
+      await handleTrialFinish()
     } else {
       if (onNext && typeof onNext === 'function') {
-        onNext(selectedPlan)
+        const currentTerms = await getCurrentTerms()
+        if (!currentTerms) {
+          toast.error('Nenhum termo de uso disponível.')
+          return
+        }
+        await acceptTerms({
+        clientUserId: formData.clientUserId!,
+        termsId: currentTerms.id,
+      })
+
+        const subscriptionData = await createSubscriptionOnly({
+        clientId: formData.clientId,
+        planId: selectedPlan.id!,
+        installments: 1,
+        paymentMethod: 'PIX'
+      })
+        onNext(selectedPlan, subscriptionData.payment?.id)
       }
     }
   }
 
 
-async function handleTrialFinish() {
-  if (!selectedPlan || !formData.clientId) return
+  async function handleTrialFinish() {
+    if (!selectedPlan || !formData.clientId) return
 
-  setLoading(true)
-  try {
-    // 2. Aceita os termos
-    const currentTerms = await getCurrentTerms()
-    if (!currentTerms) {
-      toast.error('Nenhum termo de uso disponível.')
-      return
+    setLoading(true)
+    try {
+      const currentTerms = await getCurrentTerms()
+      if (!currentTerms) {
+        toast.error('Nenhum termo de uso disponível.')
+        return
+      }
+
+      await acceptTerms({
+        clientUserId: formData.clientUserId!,
+        termsId: currentTerms.id,
+      })
+      const subscriptionData = await createSubscriptionOnly({
+        clientId: formData.clientId,
+        planId: selectedPlan.id!,
+        installments: 1,
+        paymentMethod: 'PIX'
+      })
+
+      router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'trial-created'}`)
+
+    } catch (err: any) {
+      console.error('Erro:', err)
+      toast.error(err?.message || 'Erro ao ativar plano trial.')
+    } finally {
+      setLoading(false)
     }
-
-    await acceptTerms({
-      clientUserId: formData.clientUserId!,
-      termsId: currentTerms.id,
-    })
-    const subscriptionData = await createSubscriptionOnly({
-      clientId: formData.clientId,
-      planId: selectedPlan.id!,
-      installments: 1, 
-      paymentMethod: 'PIX' 
-    })
-
-
-    // 5. Sucesso - redireciona com parâmetro de nova assinatura
-    router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'trial-created'}`)
-    
-  } catch (err: any) {
-    console.error('Erro:', err)
-    toast.error(err?.message || 'Erro ao ativar plano trial.')
-  } finally {
-    setLoading(false)
   }
-}
 
   if (plansLoading) {
     return (
@@ -143,8 +154,8 @@ async function handleTrialFinish() {
             onClick={onBack}
             disabled={loading}
             className={`text-sm transition ${loading
-                ? 'text-gray-400 cursor-not-allowed'
-                : 'text-gray-600 hover:underline'
+              ? 'text-gray-400 cursor-not-allowed'
+              : 'text-gray-600 hover:underline'
               }`}
           >
             Voltar
@@ -166,8 +177,8 @@ async function handleTrialFinish() {
             onClick={onBack}
             disabled={loading}
             className={`text-sm transition ${loading
-                ? 'text-gray-400 cursor-not-allowed'
-                : 'text-gray-600 hover:underline'
+              ? 'text-gray-400 cursor-not-allowed'
+              : 'text-gray-600 hover:underline'
               }`}
           >
             Voltar
@@ -192,8 +203,8 @@ async function handleTrialFinish() {
             onClick={() => setSelectedPlan(plan)}
             disabled={loading}
             className={`border rounded-lg p-4 text-gray-600 text-left shadow-sm transition hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${selectedPlan?.id === plan.id
-                ? 'border-yellow-500 bg-yellow-50'
-                : 'border-gray-300 hover:border-gray-400'
+              ? 'border-yellow-500 bg-yellow-50'
+              : 'border-gray-300 hover:border-gray-400'
               }`}
           >
             <div className="flex justify-between items-start mb-2">
@@ -244,8 +255,8 @@ async function handleTrialFinish() {
           onClick={onBack}
           disabled={loading}
           className={`text-sm transition ${loading
-              ? 'text-gray-400 cursor-not-allowed'
-              : 'text-gray-600 hover:underline'
+            ? 'text-gray-400 cursor-not-allowed'
+            : 'text-gray-600 hover:underline'
             }`}
         >
           Voltar
@@ -254,8 +265,8 @@ async function handleTrialFinish() {
           onClick={handleContinue}
           disabled={!selectedPlan || loading}
           className={`px-6 py-2 rounded font-medium transition ${selectedPlan && !loading
-              ? 'bg-yellow-400 text-black hover:bg-yellow-300 shadow-sm'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            ? 'bg-yellow-400 text-black hover:bg-yellow-300 shadow-sm'
+            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
         >
           {selectedPlan?.isTrial

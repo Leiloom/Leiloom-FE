@@ -1,5 +1,4 @@
 import { Html, Head, Main, NextScript } from "next/document";
-<script src="https://sdk.mercadopago.com/js/v2"></script>
 
 
 export default function Document(){
@@ -9,6 +8,7 @@ export default function Document(){
                 <link rel="icon" href="/favicon.ico" />
             </Head>
             <body>
+                <script src="https://sdk.mercadopago.com/js/v2"></script>
                 <Main/>
                 <NextScript/>
             </body>
