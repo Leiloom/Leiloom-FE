@@ -128,11 +128,14 @@ export async function updateClientPlan(id: string, data: UpdateClientPlanDto): P
 }
 
 /**
- * Ativa um plano manualmente (admin)
+ * Ativa um plano manualmente (admin) - CORRIGIDO
  */
-export async function activateClientPlan(id: string): Promise<ClientPlan> {
+export async function activateClientPlan(
+  id: string,
+  body: { startsAt: string; expiresAt: string }
+): Promise<ClientPlan> {
   try {
-    const response = await api.patch(`/client-plans/${id}/activate`)
+    const response = await api.patch(`/client-plans/${id}/activate`, body)
     return response.data
   } catch (error: any) {
     console.error('Erro ao ativar plano:', error)
@@ -150,5 +153,31 @@ export async function deleteClientPlan(id: string) {
   } catch (error: any) {
     console.error('Erro ao remover associação cliente-plano:', error)
     return Promise.reject({ message: 'Erro ao remover associação cliente-plano.' })
+  }
+}
+
+/**
+ * ✅ CORRIGIDO: Usar endpoint correto do backend
+ */
+export async function getClientPlansByClientId(clientId: string): Promise<ClientPlan[]> {
+  try {
+    const response = await api.get(`/client-plans/client/${clientId}`)
+    return response?.data || []
+  } catch (error: any) {
+    console.error('Erro ao buscar planos por cliente:', error)
+    return []
+  }
+}
+
+/**
+ * Lista apenas planos pagos e vigentes, aptos a reativação
+ */
+export async function getReactivatableClientPlans(clientId: string): Promise<ClientPlan[]> {
+  try {
+    const response = await api.get(`/client-plans/client/${clientId}/reactivatable`);
+    return response?.data || [];
+  } catch (error: any) {
+    console.error('Erro ao buscar planos reativáveis:', error);
+    return [];
   }
 }

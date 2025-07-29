@@ -6,7 +6,7 @@ declare global {
   }
 }
 import Head from 'next/head'
-import { useState, useEffect, Fragment, useCallback } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-toastify'
 import { Dialog, Transition } from '@headlessui/react'
@@ -20,6 +20,7 @@ import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
 import { TokenPayload } from '@/utils/jwtUtils'
 import {
+  cancelPayment,
   getAllPaymentsByClient,
   getDetailedPaymentSummary,
   PendingPayment,
@@ -238,14 +239,24 @@ function ClientPaymentsPage({ user }: Props) {
             disabled={isLoading}
           />
           {(item.status === 'PENDING' || item.status === 'OVERDUE') && (
-            <button
-              onClick={() => handlePayPayment(item)}
-              disabled={isLoading}
-              className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition disabled:opacity-50"
-              title="Pagar agora"
-            >
-              Pagar
-            </button>
+            <>
+              <button
+                onClick={() => handlePayPayment(item)}
+                disabled={isLoading}
+                className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition disabled:opacity-50"
+                title="Pagar agora"
+              >
+                Pagar
+              </button>
+              <button
+                onClick={() => handleCancelPayment(item)}
+                disabled={isLoading}
+                className="px-3 py-1 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition disabled:opacity-50"
+                title="Cancelar pagamento"
+              >
+                Cancelar
+              </button>
+            </>
           )}
           {item.status === 'PAID' && (
             <button
@@ -320,7 +331,6 @@ function ClientPaymentsPage({ user }: Props) {
     resetToFirstPage()
   }, [payments, searchTerm, statusFilter, dateFilter])
 
-
   async function loadData() {
     setIsLoading(true)
     try {
@@ -357,7 +367,6 @@ function ClientPaymentsPage({ user }: Props) {
     }
   }
 
-  // Função para carregar o script do MercadoPago dinamicamente
   const loadMercadoPagoScript = (): Promise<void> => {
     return new Promise((resolve, reject) => {
       if (window.MercadoPago) {
@@ -397,6 +406,20 @@ function ClientPaymentsPage({ user }: Props) {
     return () => clearInterval(interval)
   }, [selectedPaymentForPayment?.id])
 
+  async function handleCancelPayment(payment: PendingPayment) {
+    if (!window.confirm('Tem certeza que deseja cancelar este pagamento? Essa ação não pode ser desfeita.')) return;
+
+    setIsLoading(true)
+    try {
+      await cancelPayment(payment.id, 'Cancelado pelo usuário')
+      toast.success('Pagamento cancelado com sucesso')
+      await loadData()
+    } catch (error) {
+      toast.error('Erro ao cancelar pagamento')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   async function handleGoToPayment() {
     if (!selectedPaymentForPayment) return

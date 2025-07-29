@@ -5,7 +5,7 @@ declare global {
     MercadoPago: any
   }
 }
-
+import { activateClientPlan } from '@/services/clientPlanService'
 import Head from 'next/head'
 import { useState, useEffect, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
@@ -42,7 +42,7 @@ import {
   Banknote,
   Gift
 } from 'lucide-react'
-
+import { getReactivatableClientPlans } from '@/services/clientPlanService'
 interface Props {
   user: TokenPayload
 }
@@ -51,13 +51,50 @@ function ClientPlanControlPage({ user }: Props) {
   const router = useRouter()
   const [paymentSummary, setPaymentSummary] = useState<DetailedPaymentSummary | null>(null)
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([])
-  const [clientPlans, setClientPlans] = useState<any[]>([])
+  const [clientPlans, setClientPlans] = useState<any[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null)
+
+  interface PlanPeriod {
+    startsAt: string | Date
+    expiresAt: string | Date
+    isCurrent?: boolean
+    isTrial?: boolean
+  }
+
+  interface ReactivatePlan {
+    status: string
+    period?: PlanPeriod
+  }
+
+  interface ClientPlanPeriod {
+    startsAt: string | Date;
+    expiresAt: string | Date;
+    isCurrent?: boolean;
+    isTrial?: boolean;
+  }
+
+  interface ClientPlan {
+    periods?: ClientPlanPeriod[];
+    [key: string]: any;
+  }
+
+  const canReactivatePlan = (clientPlan: ClientPlan): boolean => {
+    if (!clientPlan.periods || !Array.isArray(clientPlan.periods)) return false;
+    const now = new Date();
+
+    // Pega o período vigente e não atual
+    return clientPlan.periods.some((period: ClientPlanPeriod) =>
+      period.isCurrent === false &&
+      new Date(period.expiresAt) >= now
+    );
+  }
+
+
 
   useEffect(() => {
     loadData()
@@ -77,7 +114,7 @@ function ClientPlanControlPage({ user }: Props) {
           toast.success('Pagamento aprovado! Seu plano foi ativado.')
           setIsUpgradeModalOpen(false)
           setCreatedPaymentId(null)
-          loadData() // Recarrega os dados
+          loadData() 
         }
       } catch (error) {
         console.error('Erro ao verificar status do pagamento:', error)
@@ -91,11 +128,11 @@ function ClientPlanControlPage({ user }: Props) {
     setIsLoading(true)
     try {
       const [summaryData, plansData, clientPlansData, pendingPaymentsData] = await Promise.all([
-        getDetailedPaymentSummary(),
-        getActivePlans(),
-        getAllClientPlans(),
-        getPendingPayments()
-      ])
+  getDetailedPaymentSummary(),
+  getActivePlans(),
+  getReactivatableClientPlans(user.clientId ?? ''),
+  getPendingPayments()
+])
       setPaymentSummary(summaryData)
       setAvailablePlans(plansData)
       setClientPlans(clientPlansData)
@@ -123,12 +160,12 @@ function ClientPlanControlPage({ user }: Props) {
 
   const getDaysUntilExpiration = () => {
     if (!paymentSummary?.currentPlan?.period?.expiresAt) return null
-    
+
     const expirationDate = new Date(paymentSummary.currentPlan.period.expiresAt)
     const today = new Date()
     const diffTime = expirationDate.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
+
     return diffDays
   }
 
@@ -198,7 +235,7 @@ function ClientPlanControlPage({ user }: Props) {
         icon: Clock
       }
     }
-    
+
     return {
       status: 'active',
       message: `Ativo até ${formatDate(currentPlan.period?.expiresAt || '')}`,
@@ -229,17 +266,33 @@ function ClientPlanControlPage({ user }: Props) {
     return features
   }
 
-  // Verifica se o cliente já teve trial
+  // ✅ FUNÇÃO MELHORADA para verificar se já teve trial
   const hasHadTrial = () => {
-    return clientPlans.some(cp => cp.period?.isTrial)
+    // Verifica nos clientPlans e seus períodos
+    const hadTrialFromPlans = clientPlans.some(cp =>
+      cp.periods?.some((period: any) => period.isTrial) ||
+      cp.plan?.isTrial
+    )
+
+    // Verifica nos pendingPayments
+    const hadTrialFromPending = pendingPayments.some(payment =>
+      payment.clientPlan.plan?.isTrial
+    )
+
+    // Verifica no plano atual
+    const currentTrialActive = paymentSummary?.currentPlan?.period?.isTrial
+
+    return hadTrialFromPlans || hadTrialFromPending || currentTrialActive
   }
 
-  // Filtra planos disponíveis (remove trial se já teve)
+  // ✅ FILTRAR planos disponíveis com validação mais robusta
   const getAvailablePlans = () => {
     const hadTrial = hasHadTrial()
+
     return availablePlans.filter(plan => {
+      // Remove planos trial se já teve trial
       if (plan.isTrial && hadTrial) {
-        return false // Remove trial se já teve
+        return false
       }
       return true
     })
@@ -248,13 +301,20 @@ function ClientPlanControlPage({ user }: Props) {
   const isUpgradeAvailable = (plan: Plan) => {
     if (!paymentSummary?.currentPlan) return true
     if (paymentSummary.currentPlan.period?.isTrial) return !plan.isTrial
-    
+
     // Considera upgrade se o preço for maior ou se tem mais recursos
     return plan.price > (paymentSummary.currentPlan.totalAmount || 0) ||
-           (plan.numberOfUsers ?? 1) > (paymentSummary.currentPlan.numberOfUsers || 1)
+      (plan.numberOfUsers ?? 1) > (paymentSummary.currentPlan.numberOfUsers || 1)
   }
 
+  // ✅ VALIDAÇÃO antes de selecionar plano
   const handleSelectPlan = async (plan: Plan) => {
+    // ✅ VALIDAÇÃO ADICIONAL: Impedir selecionar trial se já teve
+    if (plan.isTrial && hasHadTrial()) {
+      toast.error('Você já utilizou um período trial anteriormente.')
+      return
+    }
+
     // Verificar se há pagamentos pendentes
     if (pendingPayments.length > 0) {
       const confirmCancel = window.confirm(
@@ -262,7 +322,7 @@ function ClientPlanControlPage({ user }: Props) {
         'Ao selecionar um novo plano, os pagamentos pendentes serão cancelados. ' +
         'Deseja continuar?'
       )
-      
+
       if (!confirmCancel) {
         return
       }
@@ -271,15 +331,15 @@ function ClientPlanControlPage({ user }: Props) {
       try {
         setIsLoading(true)
         await Promise.all(
-          pendingPayments.map(payment => 
+          pendingPayments.map(payment =>
             cancelPayment(payment.id, 'Cancelado para criação de novo plano')
           )
         )
-        
+
         // Atualizar lista de pagamentos pendentes
         const updatedPendingPayments = await getPendingPayments()
         setPendingPayments(updatedPendingPayments)
-        
+
         toast.success('Pagamentos pendentes cancelados com sucesso')
       } catch (error) {
         toast.error('Erro ao cancelar pagamentos pendentes')
@@ -294,8 +354,47 @@ function ClientPlanControlPage({ user }: Props) {
     setIsUpgradeModalOpen(true)
   }
 
+  interface HandleReactivatePlanPeriod {
+    startsAt: string | Date;
+    expiresAt: string | Date;
+  }
+
+  interface HandleReactivatePlanClientPlan {
+    id: string;
+    [key: string]: any;
+  }
+
+  const handleReactivatePlan = async (
+    clientPlan: HandleReactivatePlanClientPlan,
+    period: HandleReactivatePlanPeriod
+  ): Promise<void> => {
+    setIsLoading(true)
+    try {
+      await activateClientPlan(clientPlan.id, {
+        startsAt: typeof period.startsAt === 'string' ? period.startsAt : period.startsAt.toISOString(),
+        expiresAt: typeof period.expiresAt === 'string' ? period.expiresAt : period.expiresAt.toISOString()
+      })
+      toast.success('Plano reativado com sucesso!')
+      await loadData()
+    } catch (err) {
+      toast.error('Erro ao reativar o plano.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+
+  // ✅ VALIDAÇÃO antes de criar assinatura
   const handleCreateSubscription = async () => {
     if (!selectedPlan || !user.clientId) return
+
+    // ✅ VALIDAÇÃO DUPLA: Verificar trial novamente
+    if (selectedPlan.isTrial && hasHadTrial()) {
+      toast.error('Você já utilizou um período trial anteriormente.')
+      setIsUpgradeModalOpen(false)
+      return
+    }
+
 
     setIsProcessingPayment(true)
     try {
@@ -309,12 +408,17 @@ function ClientPlanControlPage({ user }: Props) {
 
       if (subscriptionData.payment?.id) {
         setCreatedPaymentId(subscriptionData.payment.id)
-        
+
         // Ir direto para pagamento
         await handleGoToPayment(subscriptionData.payment.id)
       }
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao criar assinatura')
+      // ✅ TRATAMENTO específico para erro de trial
+      if (error.message?.includes('trial anteriormente')) {
+        toast.error('Você já utilizou um período trial anteriormente.')
+      } else {
+        toast.error(error.message || 'Erro ao criar assinatura')
+      }
       console.error('Erro:', error)
     } finally {
       setIsProcessingPayment(false)
@@ -376,9 +480,9 @@ function ClientPlanControlPage({ user }: Props) {
           email: user.email
         },
         back_urls: {
-          success: `${window.location.origin}/client/plan-control`,
-          failure: `${window.location.origin}/client/plan-control`,
-          pending: `${window.location.origin}/client/plan-control`
+          success: `${process.env.NEXT_PUBLIC_MP_URL}/client/plan-control`,
+          failure: `${process.env.NEXT_PUBLIC_MP_URL}/client/plan-control`,
+          pending: `${process.env.NEXT_PUBLIC_MP_URL}/client/plan-control`
         },
         external_reference: `payment_${paymentId}`,
         notification_url: `${process.env.NEXT_PUBLIC_MP_URL}/api/mercadopago/webhook`,
@@ -397,6 +501,8 @@ function ClientPlanControlPage({ user }: Props) {
           absorb_tax: selectedPlan.absorbTax
         }
       }
+      console.log('Enviando para Mercado Pago:\n', JSON.stringify(preferenceData, null, 2))
+
 
       const response = await fetch('/api/mercadopago/create-preference', {
         method: 'POST',
@@ -493,10 +599,10 @@ function ClientPlanControlPage({ user }: Props) {
         <title>Controle de Plano - Leiloom</title>
         <meta name="description" content="Gerencie seu plano e assinatura na plataforma Leiloom" />
       </Head>
-      
+
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-6 max-w-6xl">
-          
+
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Controle de Plano</h1>
@@ -517,7 +623,7 @@ function ClientPlanControlPage({ user }: Props) {
                   <p className={`text-sm font-medium ${statusInfo.color} mb-3`}>
                     {statusInfo.message}
                   </p>
-                  
+
                   {currentPlan && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
@@ -541,9 +647,9 @@ function ClientPlanControlPage({ user }: Props) {
                       <div>
                         <span className="text-gray-600">Método:</span>
                         <div className="font-semibold text-gray-900">
-                          {currentPlan.paymentMethod === 'PIX' ? 'PIX' : 
-                           currentPlan.paymentMethod === 'CREDIT_CARD' ? 'Cartão' : 
-                           currentPlan.paymentMethod}
+                          {currentPlan.paymentMethod === 'PIX' ? 'PIX' :
+                            currentPlan.paymentMethod === 'CREDIT_CARD' ? 'Cartão' :
+                              currentPlan.paymentMethod}
                         </div>
                       </div>
                     </div>
@@ -571,25 +677,25 @@ function ClientPlanControlPage({ user }: Props) {
 
               {/* Botão de ação baseado no status */}
               <div className="ml-4">
-                {(statusInfo.status === 'no-plan' || 
-                  statusInfo.status === 'trial-ending' || 
+                {(statusInfo.status === 'no-plan' ||
+                  statusInfo.status === 'trial-ending' ||
                   statusInfo.status === 'trial-expired' ||
                   statusInfo.status === 'expired' ||
                   statusInfo.status === 'expiring-soon') && (
-                  <Button
-                    onClick={() => {
-                      const recommendedPlan = availablePlans.find(p => !p.isTrial && p.price > 0)
-                      if (recommendedPlan) {
-                        handleSelectPlan(recommendedPlan)
-                      }
-                    }}
-                    variant="primary"
-                    className="whitespace-nowrap"
-                  >
-                    {statusInfo.status === 'no-plan' ? 'Escolher Plano' : 
-                     statusInfo.status.includes('trial') ? 'Fazer Upgrade' : 'Renovar Plano'}
-                  </Button>
-                )}
+                    <Button
+                      onClick={() => {
+                        const recommendedPlan = getAvailablePlans().find(p => !p.isTrial && p.price > 0)
+                        if (recommendedPlan) {
+                          handleSelectPlan(recommendedPlan)
+                        }
+                      }}
+                      variant="primary"
+                      className="whitespace-nowrap"
+                    >
+                      {statusInfo.status === 'no-plan' ? 'Escolher Plano' :
+                        statusInfo.status.includes('trial') ? 'Fazer Upgrade' : 'Renovar Plano'}
+                    </Button>
+                  )}
               </div>
             </div>
           </div>
@@ -612,21 +718,69 @@ function ClientPlanControlPage({ user }: Props) {
               )}
             </div>
 
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Planos Pagos e Vigentes</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {clientPlans.map((clientPlan) => {
+                    interface VigentePeriod {
+                    startsAt: string | Date;
+                    expiresAt: string | Date;
+                    isCurrent?: boolean;
+                    isTrial?: boolean;
+                    }
+
+                    const vigentePeriod: VigentePeriod | undefined = clientPlan.periods?.find(
+                    (p: VigentePeriod) => !p.isCurrent && new Date(p.expiresAt) >= new Date()
+                    )
+                  if (!vigentePeriod) return null
+
+                  return (
+                    <div key={clientPlan.id} className="border rounded-lg p-6 relative bg-white">
+                      <div className="mb-4">
+                        <h4 className="text-lg font-bold text-gray-900">{clientPlan.plan?.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          Período: {formatDate(vigentePeriod.startsAt)} até {formatDate(vigentePeriod.expiresAt)}
+                        </p>
+                      </div>
+                      <Button
+                        variant="primary"
+                        onClick={() => handleReactivatePlan(clientPlan, vigentePeriod)}
+                        className="w-full"
+                      >
+                        Ativar Plano
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getAvailablePlans().map((plan) => {
                 const isCurrentPlan = currentPlan?.planName === plan.name
                 const canUpgrade = isUpgradeAvailable(plan)
-                
+                const isTrialBlocked = plan.isTrial && hasHadTrial()
+
                 return (
                   <div
                     key={plan.id}
-                    className={`border rounded-lg p-6 relative transition-all hover:shadow-md ${
-                      isCurrentPlan 
-                        ? 'border-green-300 bg-green-50' 
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
+                    className={`border rounded-lg p-6 relative transition-all ${isTrialBlocked
+                        ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
+                        : isCurrentPlan
+                          ? 'border-green-300 bg-green-50'
+                          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                      }`}
                   >
-                    {isCurrentPlan && (
+                    {/* ✅ INDICADOR de trial bloqueado */}
+                    {isTrialBlocked && (
+                      <div className="absolute -top-3 left-4">
+                        <span className="bg-red-500 text-white text-xs px-3 py-1 rounded-full font-medium">
+                          Trial Usado
+                        </span>
+                      </div>
+                    )}
+
+                    {isCurrentPlan && !isTrialBlocked && (
                       <div className="absolute -top-3 left-4">
                         <span className="bg-green-500 text-white text-xs px-3 py-1 rounded-full font-medium">
                           Plano Atual
@@ -634,7 +788,7 @@ function ClientPlanControlPage({ user }: Props) {
                       </div>
                     )}
 
-                    {canUpgrade && !isCurrentPlan && !plan.isTrial && (
+                    {canUpgrade && !isCurrentPlan && !plan.isTrial && !isTrialBlocked && (
                       <div className="absolute -top-3 right-4">
                         <span className="bg-blue-500 text-white text-xs px-3 py-1 rounded-full font-medium flex items-center">
                           <ArrowUp className="h-3 w-3 mr-1" />
@@ -646,7 +800,7 @@ function ClientPlanControlPage({ user }: Props) {
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h4 className="text-lg font-bold text-gray-900">{plan.name}</h4>
-                        {plan.isTrial && (
+                        {plan.isTrial && !isTrialBlocked && (
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
                             Trial Gratuito
                           </span>
@@ -696,9 +850,9 @@ function ClientPlanControlPage({ user }: Props) {
                       variant={isCurrentPlan ? "neutral" : canUpgrade ? "primary" : "neutral"}
                       className="w-full"
                     >
-                      {isCurrentPlan ? 'Plano Atual' : 
-                       plan.isTrial ? 'Iniciar Trial' :
-                       canUpgrade ? 'Fazer Upgrade' : 'Selecionar Plano'}
+                      {isCurrentPlan ? 'Plano Atual' :
+                        plan.isTrial ? 'Iniciar Trial' :
+                          canUpgrade ? 'Fazer Upgrade' : 'Selecionar Plano'}
                     </Button>
                   </div>
                 )

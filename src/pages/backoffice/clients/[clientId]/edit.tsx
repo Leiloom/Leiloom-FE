@@ -46,36 +46,23 @@ import {
   Download,
   Edit3
 } from 'lucide-react'
-
+import { ClientPlansTab } from '@/pages/backoffice/clients/[clientId]/client-plans-tab'
 interface Country {
   code: string
   name: string
 }
 
-
-// Modal de alteração de status
-
-
-
 function ClientEditPage() {
   const router = useRouter()
   const params = useParams<{ clientId: string }>()
   const clientId = params?.clientId
-
-  // Estados principais
   const [client, setClient] = useState<Client | null>(null)
   const [users, setUsers] = useState<ClientUser[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'info' | 'users' | 'invoices' | 'plans'>('info')
-
-  // Estados para modais
   const [isUserModalOpen, setIsUserModalOpen] = useState(false)
-  const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false)
-  const [isStatusChangeModalOpen, setIsStatusChangeModalOpen] = useState(false)
   const [userAction, setUserAction] = useState<'create' | 'edit'>('create')
   const [editingUser, setEditingUser] = useState<ClientUser | null>(null)
-
-  // Estados para endereço
   const [isLoadingCountries, setIsLoadingCountries] = useState(false)
   const [isLoadingStates, setIsLoadingStates] = useState(false)
   const [isLoadingCities, setIsLoadingCities] = useState(false)
@@ -99,9 +86,6 @@ function ClientEditPage() {
     fetchPaymentData()
   }, [clientId])
 
-
-
-  // Mapeamentos
   const statusMap: Record<Client['status'], { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
     PENDING: { label: 'Pendente', variant: 'warning' },
     CONFIRMED: { label: 'Confirmado', variant: 'info' },
@@ -116,8 +100,6 @@ function ClientEditPage() {
     ClientOperator: { label: 'Operador', variant: 'error' },
   }
 
-
-  // Paginação
   const {
     currentPage: usersCurrentPage,
     totalPages: usersTotalPages,
@@ -126,8 +108,6 @@ function ClientEditPage() {
     resetToFirstPage: resetUsersPage
   } = usePagedData(users, 10)
 
-
-  // Colunas da tabela de usuários
   const userColumns = [
     { key: 'name', header: 'Nome' },
     { key: 'email', header: 'Email', className: 'hidden sm:table-cell' },
@@ -167,8 +147,6 @@ function ClientEditPage() {
     }
   ]
 
-
-  // Tabs
   const tabs = [
     { id: 'info', label: 'Informações', icon: User },
     { id: 'users', label: 'Usuários', icon: User },
@@ -183,8 +161,6 @@ function ClientEditPage() {
     isTrial: boolean
   } | null>(null)
 
-
-  // Effects
   useEffect(() => {
     if (!clientId) return;
     loadAll();
@@ -201,8 +177,6 @@ function ClientEditPage() {
     loadCities()
   }, [client?.state])
 
-
-
   async function loadAll() {
     setIsLoading(true);
     try {
@@ -210,10 +184,7 @@ function ClientEditPage() {
       setClient(c);
       setUsers(c.clientUsers || []);
       resetUsersPage();
-
-      // ✅ CORREÇÃO: Carregar plano DEPOIS de ter os usuários
-      await loadClientPlanInfo(c.clientUsers || []); // Passar usuários como parâmetro
-
+      await loadClientPlanInfo(c.clientUsers || []);
     } catch {
       toast.error('Erro ao carregar dados do cliente');
     } finally {
@@ -230,9 +201,8 @@ function ClientEditPage() {
         const activeUsers = usersToCount.filter(u => u.status !== 'EXCLUDED').length
 
         const maxUsers = paymentSummary.currentPlan.period?.isTrial
-          ? 1 // Trial permite apenas 1 usuário
-          : (paymentSummary.currentPlan.numberOfUsers || 5) // Usar numberOfUsers do plano
-
+          ? 1
+          : (paymentSummary.currentPlan.numberOfUsers || 5)
         setPlanInfo({
           planName: paymentSummary.currentPlan.planName,
           numberOfUsers: maxUsers,
@@ -245,7 +215,6 @@ function ClientEditPage() {
       console.error('Erro ao carregar informações do plano:', error)
     }
   }
-
 
   async function loadCountries() {
     setIsLoadingCountries(true);
@@ -313,7 +282,6 @@ function ClientEditPage() {
     }
   }
 
-  // Adicionar esta função antes das outras funções
   function openCreateUserModal() {
     if (planInfo && !planInfo.canAddUsers) {
       const message = planInfo.isTrial
@@ -329,8 +297,6 @@ function ClientEditPage() {
     setIsUserModalOpen(true)
   }
 
-
-  // Funções de manipulação
   async function handleCepChange(cep: string) {
     const cleanCep = cep.replace(/\D/g, '')
 
@@ -373,7 +339,6 @@ function ClientEditPage() {
   }
 
   async function saveUser(payload: Partial<ClientUser> & { password?: string }) {
-    // ✅ Validação para criação de novo usuário
     if (userAction === 'create' && planInfo && !planInfo.canAddUsers) {
       const message = planInfo.isTrial
         ? 'Limite atingido! Planos trial permitem apenas 1 usuário. Cliente precisa fazer upgrade para adicionar mais usuários.'
@@ -406,8 +371,6 @@ function ClientEditPage() {
       setIsLoading(false)
     }
   }
-
-
 
   if (!client) return null
 
@@ -662,7 +625,6 @@ function ClientEditPage() {
               {/* Usuários */}
               {activeTab === 'users' && (
                 <div className="space-y-6">
-                  {/* ✅ NOVO: Card de Informações do Plano */}
                   {planInfo && (
                     <div className="bg-white rounded-lg border border-gray-200 p-4">
                       <div className="flex items-center justify-between">
@@ -739,15 +701,12 @@ function ClientEditPage() {
               {activeTab === 'plans' && (
                 <div className="space-y-6">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <h2 className="text-lg font-semibold text-gray-900">Planos do Cliente</h2>
-                  </div>
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                    <div className="flex items-center">
-                      <div>
-                        <h3 className="text-lg font-medium text-blue-900">Gestão de Planos</h3>
-                      </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">Gestão de Planos</h2>
+                      <p className="text-sm text-gray-600">Ative planos e visualize o histórico deste cliente</p>
                     </div>
                   </div>
+                  <ClientPlansTab clientId={clientId!} />
                 </div>
               )}
             </div>

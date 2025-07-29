@@ -58,6 +58,7 @@ export interface PendingPayment {
         plan: {
             name: string
             maxInstallments: number
+            isTrial: boolean
         }
     }
     absorbTax: boolean

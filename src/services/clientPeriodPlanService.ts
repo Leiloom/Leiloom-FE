@@ -3,12 +3,30 @@ import { api } from './api'
 export interface ClientPeriodPlan {
   id?: string
   clientPlanId: string
-  startsAt: Date
-  expiresAt: Date
+  startsAt: string  // ✅ CORRIGIDO: string em vez de Date para compatibilidade com API
+  expiresAt: string // ✅ CORRIGIDO: string em vez de Date para compatibilidade com API
   isTrial?: boolean
   isCurrent?: boolean
   wasConfirmed?: boolean
   createdOn?: string
+  // ✅ ADICIONADO: relacionamento com client plan
+  clientPlan?: {
+    id: string
+    clientId: string
+    planId: string
+    current?: boolean
+    plan?: {
+      id: string
+      name: string
+      price: number
+      durationDays: number
+      numberOfUsers: number
+      isTrial: boolean
+      allowInstallments: boolean
+      maxInstallments: number
+      absorbTax: boolean
+    }
+  }
 }
 
 export interface CreateClientPeriodPlanDto {
@@ -100,4 +118,30 @@ export function calculateExpirationDate(startDate: Date, durationDays: number): 
   const expirationDate = new Date(startDate)
   expirationDate.setDate(expirationDate.getDate() + durationDays)
   return expirationDate
+}
+
+/**
+ * ✅ CORRIGIDO: Usar endpoint correto do backend
+ */
+export async function getClientPeriodPlansByClientId(clientId: string): Promise<ClientPeriodPlan[]> {
+  try {
+    const response = await api.get(`/client-period-plans/client/${clientId}`)
+    return response?.data || []
+  } catch (error: any) {
+    console.error('Erro ao buscar períodos de planos por cliente:', error)
+    return []
+  }
+}
+
+/**
+ * ✅ ADICIONADO: Ativar período de plano
+ */
+export async function activateClientPeriodPlan(id: string): Promise<ClientPeriodPlan> {
+  try {
+    const response = await api.patch(`/client-period-plans/${id}/activate`)
+    return response.data
+  } catch (error: any) {
+    console.error('Erro ao ativar período do plano:', error)
+    return Promise.reject({ message: 'Erro ao ativar período do plano.' })
+  }
 }

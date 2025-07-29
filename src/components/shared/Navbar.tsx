@@ -27,7 +27,6 @@ export default function Navbar() {
   const isAuthenticated = !!user
 
   const handleLogout = () => {
-    // Determina o contexto baseado no usuário atual
     const context = user?.context || 'CLIENT'
     logout(context) 
     router.push('/')
@@ -61,6 +60,10 @@ export default function Navbar() {
             <Link href="/installments-client" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <CreditCardIcon className="h-4 w-4" />
               Meus Pagamentos
+            </Link>
+            <Link href="/client-plan-control" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <CurrencyDollarIcon className="h-4 w-4" />
+              Planos
             </Link>
           </>
         )}
@@ -180,6 +183,14 @@ export default function Navbar() {
                 >
                   <CreditCardIcon className="h-5 w-5" />
                   Meus Pagamentos
+                </Link>
+                <Link
+                  href="/client-plan-control"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                >
+                  <CreditCardIcon className="h-5 w-5" />
+                  Meus Planos
                 </Link>
               </>
             )}
