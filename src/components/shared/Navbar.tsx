@@ -14,7 +14,8 @@ import {
   CreditCardIcon,
   DocumentTextIcon,
   CurrencyDollarIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  ScaleIcon 
 } from '@heroicons/react/20/solid'
 import { useRouter } from 'next/navigation'
 import { useAuthContext } from '@/contexts/AuthContext'
@@ -73,22 +74,26 @@ export default function Navbar() {
               <HomeIcon className="h-4 w-4" />
               Dashboard
             </Link>
-            <Link href="/backoffice/terms" className="flex items-center gap-2 hover:text-yellow-400 transition">
-              <DocumentTextIcon className="h-4 w-4" />
-              Termos
+            <Link href="/backoffice/auctions" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <ScaleIcon className="h-4 w-4" />
+              Leilões
+            </Link>
+            <Link href="/backoffice/clients" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <UsersIcon  className="h-4 w-4" />
+              Clientes
+            </Link>
+            <Link href="/backoffice/users" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <UserGroupIcon className="h-4 w-4" />
+              Usuários
             </Link>
             <Link href="/backoffice/plans" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <CurrencyDollarIcon className="h-4 w-4" />
               Planos
-          </Link>
-          <Link href="/backoffice/users" className="flex items-center gap-2 hover:text-yellow-400 transition">
-              <UserGroupIcon className="h-4 w-4" />
-              Usuários
-          </Link>
-          <Link href="/backoffice/clients" className="flex items-center gap-2 hover:text-yellow-400 transition">
-              <UsersIcon  className="h-4 w-4" />
-              Clientes
-          </Link>
+            </Link>
+            <Link href="/backoffice/terms" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <DocumentTextIcon className="h-4 w-4" />
+              Termos
+            </Link>
           </>
         )}
         </nav>
@@ -205,36 +210,44 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <Link
+                  href="/backoffice/auctions"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                >
+                  <ScaleIcon className="h-5 w-5" />
+                  Leilões
+                </Link>
+                <Link
+                  href="/backoffice/clients"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                  >
+                  <UsersIcon  className="h-5 w-5" />
+                  Clientes
+                </Link>
+                <Link
+                  href="/backoffice/users"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                  >
+                  <UserGroupIcon className="h-5 w-5" />
+                  Usuários
+                </Link>
+                <Link
+                  href="/backoffice/plans"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                  >
+                  <CurrencyDollarIcon className="h-5 w-5" />
+                  Planos
+                </Link>
+                <Link
                   href="/backoffice/terms"
                   onClick={() => setIsOpen(false)}
                   className="flex items-center gap-2 hover:text-yellow-600 text-base"
                   >
                   <DocumentTextIcon className="h-5 w-5" />
                   Termos
-                </Link>
-                <Link
-                    href="/backoffice/plans"
-                    onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 hover:text-yellow-600 text-base"
-                    >
-                    <CurrencyDollarIcon className="h-5 w-5" />
-                    Planos
-                </Link>
-                <Link
-                    href="/backoffice/users"
-                    onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 hover:text-yellow-600 text-base"
-                    >
-                    <UserGroupIcon className="h-5 w-5" />
-                    Usuários
-                </Link>
-                <Link
-                    href="/backoffice/clients"
-                    onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 hover:text-yellow-600 text-base"
-                    >
-                    <UsersIcon  className="h-5 w-5" />
-                    Clientes
                 </Link>
               </>
             )}

@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, ReactNode } from 'react'
 import clsx from 'clsx'
 
-type ButtonVariant = 'primary' | 'danger' | 'neutral' | 'add'
+type ButtonVariant = 'primary' | 'danger' | 'neutral' | 'add' | 'add2' | 'add3'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
@@ -25,6 +25,8 @@ export function Button({
   danger: 'bg-red-600 text-white px-4 py-2 hover:bg-red-700 focus:ring-red-500',
   neutral: 'border border-gray-300 text-gray-700 bg-white px-4 py-2 hover:bg-gray-50 focus:ring-gray-500',
   add: 'bg-yellow-400 text-black px-5 py-2 rounded-md hover:bg-yellow-500 transition-colors flex items-center gap-2',
+  add2: 'bg-green-400 text-black px-5 py-2 rounded-md hover:bg-green-500 transition-colors flex items-center gap-2',
+  add3: 'bg-blue-400 text-black px-5 py-2 rounded-md hover:bg-blue-500 transition-colors flex items-center gap-2',
 }
 
 
@@ -37,7 +39,7 @@ export function Button({
       disabled={disabled}
       {...rest}
     >
-      {variant === 'add' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+      {(variant === 'add' || variant === 'add2' || variant === 'add3') && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
         <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"/>
       </svg>}
       {children}
