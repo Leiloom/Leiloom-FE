@@ -46,7 +46,7 @@ import {
   Download,
   Edit3
 } from 'lucide-react'
-import { ClientPlansTab } from '@/pages/backoffice/clients/[clientId]/client-plans-tab'
+import ClientPlansTab  from '@/pages/backoffice/clients/[clientId]/client-plans-tab'
 interface Country {
   code: string
   name: string

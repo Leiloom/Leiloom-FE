@@ -11,7 +11,7 @@ import { useRouter, useParams } from 'next/navigation'
 import MainLayout from '@/layouts/MainLayout'
 import { withBackofficeAuth } from '@/hooks/withBackofficeAuth'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { AuctionEditModal } from './AuctionEditModal'
+import  AuctionEditModal  from './AuctionEditModal'
 import { ConfirmationModal } from '@/components/shared/ConfirmationModal'
 import {
   Calendar,
