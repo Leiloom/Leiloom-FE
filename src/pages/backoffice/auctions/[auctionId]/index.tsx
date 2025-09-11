@@ -1006,7 +1006,7 @@ function AuctionDetailPage() {
                       <textarea
                         id="description"
                         name="description"
-                        rows={3}
+                        rows={7}
                         placeholder="Descreva detalhes importantes sobre o item..."
                         defaultValue={editingItem?.description}
                         className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
@@ -1141,7 +1141,7 @@ function AuctionDetailPage() {
                         id="status"
                         name="status"
                         defaultValue={editingItem?.status}
-                        className="w-full border border-gray-300 bg-gray-300 text-gray-700 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                        className="w-full border border-gray-300 rounded-md text-gray-700 shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
                         disabled={isLoading}
                       >
                         <option value="AVAILABLE">Disponível</option>
