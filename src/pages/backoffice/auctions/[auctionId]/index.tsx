@@ -11,7 +11,7 @@ import { useRouter, useParams } from 'next/navigation'
 import MainLayout from '@/layouts/MainLayout'
 import { withBackofficeAuth } from '@/hooks/withBackofficeAuth'
 import { PageHeader } from '@/components/shared/PageHeader'
-import  AuctionEditModal  from '../../../../components/backoffice/auctions/AuctionEditModal'
+import AuctionEditModal from '../../../../components/backoffice/auctions/AuctionEditModal'
 import { ConfirmationModal } from '@/components/shared/ConfirmationModal'
 import {
   Calendar,
@@ -104,6 +104,7 @@ function AuctionDetailPage() {
   const [editingLot, setEditingLot] = useState<Lot | null>(null)
   const [editingItem, setEditingItem] = useState<AuctionItem | null>(null)
   const [selectedLotId, setSelectedLotId] = useState<string>('')
+  const [isActivateModalOpen, setIsActivateModalOpen] = useState(false)
 
   const handleEditAuction = () => {
     setIsEditModalOpen(true)
@@ -125,19 +126,36 @@ function AuctionDetailPage() {
       setIsLoading(false)
     }
   }
-  const handleConfirmDeactivate = async () => {
-    if (!auctionId) return
+
+  const handleConfirmToggleStatus = async () => {
+    if (!auctionId || !auction) return
 
     setIsLoading(true)
     try {
-      await deleteAuction(auctionId)
-      toast.success('Leilão desativado com sucesso!')
+      const action = auction.isActive ? 'desativar' : 'ativar'
+
+      if (auction.isActive) {
+        // Desativar leilão
+        await deleteAuction(auctionId)
+        toast.success('Leilão desativado com sucesso!')
+      } else {
+        // Ativar leilão - assumindo que existe uma função para ativar
+        await updateAuction(auctionId, { isActive: true })
+        toast.success('Leilão ativado com sucesso!')
+      }
+
+      // Fechar o modal apropriado
       setIsDeactivateModalOpen(false)
-      router.push('/auctions')
+      setIsActivateModalOpen(false)
+
+      // Recarregar dados para atualizar o estado
+      await fetchData()
+
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || 'Erro ao desativar leilão'
+      const errorMessage = error?.response?.data?.message || `Erro ao ${auction.isActive ? 'desativar' : 'ativar'} leilão`
       toast.error(errorMessage)
       setIsDeactivateModalOpen(false)
+      setIsActivateModalOpen(false)
     } finally {
       setIsLoading(false)
     }
@@ -195,13 +213,14 @@ function AuctionDetailPage() {
   const getAuctionStatus = () => {
     if (!auction) return { status: 'unknown', label: 'Carregando...', color: 'gray' }
 
-    const now = new Date()
-    const opening = new Date(auction.openingDate)
-    const closing = new Date(auction.closingDate)
-
+    // Primeiro verificar se está ativo
     if (!auction.isActive) {
       return { status: 'inactive', label: 'Inativo', color: 'red' }
     }
+
+    const now = new Date()
+    const opening = new Date(auction.openingDate)
+    const closing = new Date(auction.closingDate)
 
     if (now < opening) {
       return { status: 'scheduled', label: 'Programado', color: 'blue' }
@@ -419,26 +438,6 @@ function AuctionDetailPage() {
       setIsLoading(false)
     }
   }
-
-  // Handler para desativar leilão
-  const handleDeactivateAuction = async () => {
-    if (!confirm('Tem certeza que deseja desativar este leilão?')) {
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      await deleteAuction(auctionId!)
-      toast.success('Leilão desativado com sucesso!')
-      router.push('/auctions')
-    } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || 'Erro ao desativar leilão'
-      toast.error(errorMessage)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   // Calcular estatísticas
   const totalItems = lots.reduce((acc, lot) => acc + (lot.items?.length || 0), 0)
   const availableItems = lots.reduce((acc, lot) =>
@@ -511,22 +510,22 @@ function AuctionDetailPage() {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <CheckCircle className={`h-6 w-6 ${auctionStatus.color === 'green' ? 'text-green-600' :
-                        auctionStatus.color === 'blue' ? 'text-blue-600' :
-                          auctionStatus.color === 'red' ? 'text-red-600' :
-                            'text-gray-600'
+                      auctionStatus.color === 'blue' ? 'text-blue-600' :
+                        auctionStatus.color === 'red' ? 'text-red-600' :
+                          'text-gray-600'
                       }`} />
                     <div>
                       <h1 className={`text-2xl font-bold ${auctionStatus.color === 'green' ? 'text-green-900' :
-                          auctionStatus.color === 'blue' ? 'text-blue-900' :
-                            auctionStatus.color === 'red' ? 'text-red-900' :
-                              'text-gray-900'
+                        auctionStatus.color === 'blue' ? 'text-blue-900' :
+                          auctionStatus.color === 'red' ? 'text-red-900' :
+                            'text-gray-900'
                         }`}>
                         {auction.name}
                       </h1>
                       <p className={`text-sm ${auctionStatus.color === 'green' ? 'text-green-700' :
-                          auctionStatus.color === 'blue' ? 'text-blue-700' :
-                            auctionStatus.color === 'red' ? 'text-red-700' :
-                              'text-gray-700'
+                        auctionStatus.color === 'blue' ? 'text-blue-700' :
+                          auctionStatus.color === 'red' ? 'text-red-700' :
+                            'text-gray-700'
                         }`}>
                         Status: {auctionStatus.label}
                       </p>
@@ -542,28 +541,41 @@ function AuctionDetailPage() {
                       <Edit3 className="h-4 w-4 mr-1" />
                       Editar
                     </Button>
-                    <Button
-                      variant="danger"
-                      onClick={() => setIsDeactivateModalOpen(true)}
-                      disabled={isLoading}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Desativar
-                    </Button>
+
+                    {/* Botão condicional baseado no status isActive */}
+                    {auction.isActive ? (
+                      <Button
+                        variant="danger"
+                        onClick={() => setIsDeactivateModalOpen(true)}
+                        disabled={isLoading}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Desativar
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        onClick={() => setIsActivateModalOpen(true)}
+                        disabled={isLoading}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Ativar
+                      </Button>
+                    )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                   <div>
                     <span className={`font-medium ${auctionStatus.color === 'green' ? 'text-green-700' :
-                        auctionStatus.color === 'blue' ? 'text-blue-700' :
-                          auctionStatus.color === 'red' ? 'text-red-700' :
-                            'text-gray-700'
+                      auctionStatus.color === 'blue' ? 'text-blue-700' :
+                        auctionStatus.color === 'red' ? 'text-red-700' :
+                          'text-gray-700'
                       }`}>Tipo:</span>
                     <div className={`font-semibold flex items-center ${auctionStatus.color === 'green' ? 'text-green-900' :
-                        auctionStatus.color === 'blue' ? 'text-blue-900' :
-                          auctionStatus.color === 'red' ? 'text-red-900' :
-                            'text-gray-900'
+                      auctionStatus.color === 'blue' ? 'text-blue-900' :
+                        auctionStatus.color === 'red' ? 'text-red-900' :
+                          'text-gray-900'
                       }`}>
                       {auction.type === 'ONLINE' ? (
                         <>
@@ -580,42 +592,42 @@ function AuctionDetailPage() {
                   </div>
                   <div>
                     <span className={`font-medium ${auctionStatus.color === 'green' ? 'text-green-700' :
-                        auctionStatus.color === 'blue' ? 'text-blue-700' :
-                          auctionStatus.color === 'red' ? 'text-red-700' :
-                            'text-gray-700'
+                      auctionStatus.color === 'blue' ? 'text-blue-700' :
+                        auctionStatus.color === 'red' ? 'text-red-700' :
+                          'text-gray-700'
                       }`}>Abertura:</span>
                     <div className={`font-semibold ${auctionStatus.color === 'green' ? 'text-green-900' :
-                        auctionStatus.color === 'blue' ? 'text-blue-900' :
-                          auctionStatus.color === 'red' ? 'text-red-900' :
-                            'text-gray-900'
+                      auctionStatus.color === 'blue' ? 'text-blue-900' :
+                        auctionStatus.color === 'red' ? 'text-red-900' :
+                          'text-gray-900'
                       }`}>
                       {formatDateTime(auction.openingDate)}
                     </div>
                   </div>
                   <div>
                     <span className={`font-medium ${auctionStatus.color === 'green' ? 'text-green-700' :
-                        auctionStatus.color === 'blue' ? 'text-blue-700' :
-                          auctionStatus.color === 'red' ? 'text-red-700' :
-                            'text-gray-700'
+                      auctionStatus.color === 'blue' ? 'text-blue-700' :
+                        auctionStatus.color === 'red' ? 'text-red-700' :
+                          'text-gray-700'
                       }`}>Encerramento:</span>
                     <div className={`font-semibold ${auctionStatus.color === 'green' ? 'text-green-900' :
-                        auctionStatus.color === 'blue' ? 'text-blue-900' :
-                          auctionStatus.color === 'red' ? 'text-red-900' :
-                            'text-gray-900'
+                      auctionStatus.color === 'blue' ? 'text-blue-900' :
+                        auctionStatus.color === 'red' ? 'text-red-900' :
+                          'text-gray-900'
                       }`}>
                       {formatDateTime(auction.closingDate)}
                     </div>
                   </div>
                   <div>
                     <span className={`font-medium ${auctionStatus.color === 'green' ? 'text-green-700' :
-                        auctionStatus.color === 'blue' ? 'text-blue-700' :
-                          auctionStatus.color === 'red' ? 'text-red-700' :
-                            'text-gray-700'
+                      auctionStatus.color === 'blue' ? 'text-blue-700' :
+                        auctionStatus.color === 'red' ? 'text-red-700' :
+                          'text-gray-700'
                       }`}>Itens:</span>
                     <div className={`font-semibold ${auctionStatus.color === 'green' ? 'text-green-900' :
-                        auctionStatus.color === 'blue' ? 'text-blue-900' :
-                          auctionStatus.color === 'red' ? 'text-red-900' :
-                            'text-gray-900'
+                      auctionStatus.color === 'blue' ? 'text-blue-900' :
+                        auctionStatus.color === 'red' ? 'text-red-900' :
+                          'text-gray-900'
                       }`}>
                       {availableItems} disponíveis / {totalItems} total
                     </div>
@@ -623,16 +635,16 @@ function AuctionDetailPage() {
                   {(auction.location || auction.url) && (
                     <div>
                       <span className={`font-medium ${auctionStatus.color === 'green' ? 'text-green-700' :
-                          auctionStatus.color === 'blue' ? 'text-blue-700' :
-                            auctionStatus.color === 'red' ? 'text-red-700' :
-                              'text-gray-700'
+                        auctionStatus.color === 'blue' ? 'text-blue-700' :
+                          auctionStatus.color === 'red' ? 'text-red-700' :
+                            'text-gray-700'
                         }`}>
                         {auction.type === 'ONLINE' ? 'URL:' : 'Local:'}
                       </span>
                       <div className={`font-semibold truncate ${auctionStatus.color === 'green' ? 'text-green-900' :
-                          auctionStatus.color === 'blue' ? 'text-blue-900' :
-                            auctionStatus.color === 'red' ? 'text-red-900' :
-                              'text-gray-900'
+                        auctionStatus.color === 'blue' ? 'text-blue-900' :
+                          auctionStatus.color === 'red' ? 'text-red-900' :
+                            'text-gray-900'
                         }`}>
                         {auction.url || auction.location}
                       </div>
@@ -655,13 +667,26 @@ function AuctionDetailPage() {
             <ConfirmationModal
               isOpen={isDeactivateModalOpen}
               onClose={() => setIsDeactivateModalOpen(false)}
-              onConfirm={handleConfirmDeactivate}
+              onConfirm={handleConfirmToggleStatus}
               title="Desativar Leilão"
-              message={`Tem certeza que deseja desativar o leilão "${auction?.name}"? Esta ação não pode ser desfeita e o leilão ficará inativo.`}
+              message={`Tem certeza que deseja desativar o leilão "${auction?.name}"? Esta ação pode ser revertida posteriormente.`}
               confirmButtonText="Desativar"
               cancelButtonText="Cancelar"
               isLoading={isLoading}
               variant="danger"
+            />
+
+            {/* Modal de Confirmação para Ativar */}
+            <ConfirmationModal
+              isOpen={isActivateModalOpen}
+              onClose={() => setIsActivateModalOpen(false)}
+              onConfirm={handleConfirmToggleStatus}
+              title="Ativar Leilão"
+              message={`Tem certeza que deseja ativar o leilão "${auction?.name}"? O leilão ficará disponível para participação.`}
+              confirmButtonText="Ativar"
+              cancelButtonText="Cancelar"
+              isLoading={isLoading}
+              variant="info"
             />
 
             {/* Gerenciar Lotes */}
@@ -984,7 +1009,7 @@ function AuctionDetailPage() {
                         rows={3}
                         placeholder="Descreva detalhes importantes sobre o item..."
                         defaultValue={editingItem?.description}
-                        className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                        className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
                         disabled={isLoading}
                       />
                     </div>
@@ -1116,7 +1141,7 @@ function AuctionDetailPage() {
                         id="status"
                         name="status"
                         defaultValue={editingItem?.status}
-                        className="w-full border border-gray-300 bg-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                        className="w-full border border-gray-300 bg-gray-300 text-gray-700 rounded-md shadow-sm px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
                         disabled={isLoading}
                       >
                         <option value="AVAILABLE">Disponível</option>
