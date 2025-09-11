@@ -9,7 +9,7 @@ import { Button } from '@/components/shared/Button'
 import { Input } from '@/components/shared/Input'
 import { Calendar, Clock, CheckCircle, AlertTriangle } from 'lucide-react'
 
-export function ClientPlansTab({ clientId }: { clientId: string }) {
+export default function ClientPlansTab({ clientId }: { clientId: string }) {
   const [plans, setPlans] = useState<Plan[]>([])
   const [clientPlans, setClientPlans] = useState<ClientPlan[]>([])
   const [periods, setPeriods] = useState<ClientPeriodPlan[]>([])

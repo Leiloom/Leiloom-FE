@@ -11,7 +11,7 @@ interface AuctionEditModalProps {
     isLoading?: boolean
 }
 
-export function AuctionEditModal({
+export default function AuctionEditModal({
     isOpen,
     onClose,
     onSave,
