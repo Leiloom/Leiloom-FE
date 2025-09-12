@@ -54,6 +54,10 @@ export default function Navbar() {
               <HomeIcon className="h-4 w-4" />
               Dashboard
             </Link>
+            <Link href="/auctions" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <ScaleIcon className="h-4 w-4" />
+              Leilões
+            </Link>
             <Link href="/users" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <UsersIcon className="h-4 w-4" />
               Usuários
@@ -172,6 +176,14 @@ export default function Navbar() {
                 >
                   <HomeIcon className="h-5 w-5" />
                   Dashboard
+                </Link>
+                <Link
+                  href="/auctions"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                >
+                  <ScaleIcon className="h-5 w-5" />
+                  Leilões
                 </Link>
                 <Link
                   href="/users"
