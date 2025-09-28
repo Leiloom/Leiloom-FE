@@ -6,6 +6,8 @@ import Head from 'next/head'
 import MainLayout from '@/layouts/MainLayout'
 import { withClientAuth } from '@/hooks/withClientAuth'
 import { TokenPayload } from '@/utils/jwtUtils'
+import { getAuctionById } from '@/services/auctionService'
+import { toast } from 'react-toastify'
 import {
     MapPin,
     Calendar,
@@ -26,6 +28,14 @@ interface Props {
     user: TokenPayload
 }
 
+interface PropertyDetails {
+    id: string
+    type: string
+    bedrooms?: number
+    parkingSpots?: number
+    area?: number
+}
+
 interface AuctionItem {
     id: string
     title: string
@@ -33,6 +43,8 @@ interface AuctionItem {
     type: 'IMOVEL' | 'VEICULO' | 'OUTROS'
     basePrice: number
     status: 'AVAILABLE' | 'SOLD' | 'CANCELLED'
+    propertyDetails?: PropertyDetails
+    // Campos calculados para compatibilidade
     address?: string
     hasValidAddress?: boolean
 }
@@ -49,157 +61,10 @@ interface Auction {
     type: 'ONLINE' | 'LOCAL'
     location?: string
     url?: string
-    openingDate: Date
-    closingDate: Date
+    openingDate: Date | string
+    closingDate: Date | string
     isActive: boolean
     lots: Lot[]
-}
-
-// Mock data para os 3 leilões
-const mockAuctionsDetail: { [key: string]: Auction } = {
-    '1': {
-        id: '1',
-        name: 'Leilão de Imóveis Residenciais - Centro SP',
-        type: 'ONLINE',
-        url: 'https://leilao.exemplo.com/jan2025',
-        openingDate: new Date('2025-01-15T09:00:00'),
-        closingDate: new Date('2025-01-15T18:00:00'),
-        isActive: true,
-        lots: [
-            {
-                id: 'lot1',
-                identification: 'Lote 001',
-                items: [
-                    {
-                        id: 'item1',
-                        title: 'Apartamento 2 quartos - Vila Madalena',
-                        description: 'Apartamento com 65m², 2 quartos, 1 banheiro, sala e cozinha',
-                        type: 'IMOVEL',
-                        basePrice: 250000,
-                        status: 'AVAILABLE',
-                        address: 'Rua Harmonia, 123 - Vila Madalena, São Paulo/SP',
-                        hasValidAddress: true
-                    },
-                    {
-                        id: 'item2',
-                        title: 'Casa 3 quartos - Jardins',
-                        description: 'Casa térrea com 120m², 3 quartos, 2 banheiros, garagem',
-                        type: 'IMOVEL',
-                        basePrice: 450000,
-                        status: 'AVAILABLE',
-                        address: 'Rua Augusta, 456 - Jardins, São Paulo/SP',
-                        hasValidAddress: true
-                    }
-                ]
-            },
-            {
-                id: 'lot2',
-                identification: 'Lote 002',
-                items: [
-                    {
-                        id: 'item3',
-                        title: 'Apartamento Cobertura - Itaim',
-                        description: 'Cobertura duplex com 180m², 4 quartos, 3 banheiros, terraço',
-                        type: 'IMOVEL',
-                        basePrice: 850000,
-                        status: 'AVAILABLE',
-                        address: undefined,
-                        hasValidAddress: false
-                    }
-                ]
-            }
-        ]
-    },
-    '2': {
-        id: '2',
-        name: 'Leilão Presencial - Veículos Nacionais',
-        type: 'LOCAL',
-        location: 'Av. Paulista, 1000 - São Paulo/SP',
-        openingDate: new Date('2025-01-20T14:00:00'),
-        closingDate: new Date('2025-01-20T17:00:00'),
-        isActive: true,
-        lots: [
-            {
-                id: 'lot3',
-                identification: 'Lote 001',
-                items: [
-                    {
-                        id: 'item4',
-                        title: 'Honda Civic 2020 - Branco',
-                        description: 'Sedan automático, 1.5 turbo, 45.000 km',
-                        type: 'VEICULO',
-                        basePrice: 85000,
-                        status: 'AVAILABLE',
-                        address: 'Av. Paulista, 1000 - Bela Vista, São Paulo/SP',
-                        hasValidAddress: true
-                    },
-                    {
-                        id: 'item5',
-                        title: 'Toyota Corolla 2019 - Prata',
-                        description: 'Sedan automático, 2.0, 38.000 km',
-                        type: 'VEICULO',
-                        basePrice: 75000,
-                        status: 'AVAILABLE',
-                        address: 'Av. Paulista, 1000 - Bela Vista, São Paulo/SP',
-                        hasValidAddress: true
-                    }
-                ]
-            }
-        ]
-    },
-    '3': {
-        id: '3',
-        name: 'Leilão Online - Equipamentos e Móveis',
-        type: 'ONLINE',
-        url: 'https://leilao.exemplo.com/equipamentos',
-        openingDate: new Date('2025-01-25T10:00:00'),
-        closingDate: new Date('2025-01-25T16:00:00'),
-        isActive: true,
-        lots: [
-            {
-                id: 'lot4',
-                identification: 'Lote 001',
-                items: [
-                    {
-                        id: 'item6',
-                        title: 'Mesa Executiva de Madeira',
-                        description: 'Mesa para escritório, 1,60x0,80m, madeira maciça',
-                        type: 'OUTROS',
-                        basePrice: 1200,
-                        status: 'AVAILABLE',
-                        address: 'Rua das Flores, 789 - Vila Olímpia, São Paulo/SP',
-                        hasValidAddress: true
-                    },
-                    {
-                        id: 'item7',
-                        title: 'Cadeira Ergonômica Presidente',
-                        description: 'Cadeira giratória com apoio lombar, couro sintético',
-                        type: 'OUTROS',
-                        basePrice: 800,
-                        status: 'AVAILABLE',
-                        address: undefined,
-                        hasValidAddress: false
-                    }
-                ]
-            },
-            {
-                id: 'lot5',
-                identification: 'Lote 002',
-                items: [
-                    {
-                        id: 'item8',
-                        title: 'Equipamento de Som Profissional',
-                        description: 'Mesa de som digital 32 canais, marca Yamaha',
-                        type: 'OUTROS',
-                        basePrice: 15000,
-                        status: 'AVAILABLE',
-                        address: 'Av. Brigadeiro Faria Lima, 321 - Itaim Bibi, São Paulo/SP',
-                        hasValidAddress: true
-                    }
-                ]
-            }
-        ]
-    }
 }
 
 function AuctionDetailPage({ user }: Props) {
@@ -212,30 +77,69 @@ function AuctionDetailPage({ user }: Props) {
     const [selectedItem, setSelectedItem] = useState<AuctionItem | null>(null)
 
     useEffect(() => {
-        loadAuctionDetail()
+        if (auctionId) {
+            loadAuctionDetail()
+        }
     }, [auctionId])
 
     async function loadAuctionDetail() {
         try {
             setLoading(true)
-            // Simular carregamento
-            await new Promise(resolve => setTimeout(resolve, 800))
-
-            const auctionData = mockAuctionsDetail[auctionId]
+            const auctionData = await getAuctionById(auctionId)
+            
             if (auctionData) {
-                setAuction(auctionData)
+                // Processar os dados para adicionar campos calculados
+                const processedAuction = {
+                    ...auctionData,
+                    lots: auctionData.lots?.map((lot: any) => ({
+                        ...lot,
+                        items: lot.items?.map((item: any) => ({
+                            ...item,
+                            // Para fins de demonstração, vamos simular endereços baseados no tipo
+                            address: generateMockAddress(item),
+                            hasValidAddress: shouldHaveAddress(item)
+                        })) || []
+                    })) || []
+                }
+                
+                setAuction(processedAuction)
+                
                 // Expandir todos os lotes por padrão
                 const expanded: { [key: string]: boolean } = {}
-                auctionData.lots.forEach(lot => {
+                processedAuction.lots.forEach((lot: any) => {
                     expanded[lot.id] = true
                 })
                 setExpandedLots(expanded)
             }
         } catch (error) {
             console.error('Erro ao carregar detalhes do leilão:', error)
+            toast.error('Erro ao carregar detalhes do leilão')
         } finally {
             setLoading(false)
         }
+    }
+
+    // Função auxiliar para gerar endereços mock (substituir por lógica real)
+    const generateMockAddress = (item: AuctionItem) => {
+        if (item.type === 'IMOVEL') {
+            const streets = ['Rua Harmonia', 'Rua Augusta', 'Av. Paulista', 'Rua Oscar Freire']
+            const neighborhoods = ['Vila Madalena', 'Jardins', 'Itaim Bibi', 'Vila Olímpia']
+            const street = streets[Math.floor(Math.random() * streets.length)]
+            const neighborhood = neighborhoods[Math.floor(Math.random() * neighborhoods.length)]
+            const number = Math.floor(Math.random() * 9999) + 1
+            return `${street}, ${number} - ${neighborhood}, São Paulo/SP`
+        }
+        if (item.type === 'VEICULO') {
+            return 'Av. Paulista, 1000 - Bela Vista, São Paulo/SP'
+        }
+        // Para OUTROS, alguns têm endereço, outros não
+        return Math.random() > 0.5 ? 'Rua das Flores, 789 - Vila Olímpia, São Paulo/SP' : undefined
+    }
+
+    const shouldHaveAddress = (item: AuctionItem) => {
+        // Lógica para determinar se o item deve ter endereço
+        if (item.type === 'IMOVEL' || item.type === 'VEICULO') return true
+        return Math.random() > 0.3 // 70% dos outros itens têm endereço
     }
 
     const toggleLot = (lotId: string) => {
@@ -252,8 +156,9 @@ function AuctionDetailPage({ user }: Props) {
         }).format(price)
     }
 
-    const formatDate = (date: Date) => {
-        return date.toLocaleDateString('pt-BR', {
+    const formatDate = (date: Date | string) => {
+        const dateObj = typeof date === 'string' ? new Date(date) : date
+        return dateObj.toLocaleDateString('pt-BR', {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric',
@@ -502,6 +407,24 @@ function AuctionDetailPage({ user }: Props) {
                                                 {selectedItem.description && (
                                                     <p className="text-sm text-gray-600 mt-1">{selectedItem.description}</p>
                                                 )}
+                                                
+                                                {/* Detalhes específicos do imóvel */}
+                                                {selectedItem.type === 'IMOVEL' && selectedItem.propertyDetails && (
+                                                    <div className="mt-2 text-sm text-gray-600">
+                                                        <div className="flex gap-4">
+                                                            {selectedItem.propertyDetails.bedrooms && (
+                                                                <span>{selectedItem.propertyDetails.bedrooms} quartos</span>
+                                                            )}
+                                                            {selectedItem.propertyDetails.parkingSpots && (
+                                                                <span>{selectedItem.propertyDetails.parkingSpots} vagas</span>
+                                                            )}
+                                                            {selectedItem.propertyDetails.area && (
+                                                                <span>{selectedItem.propertyDetails.area}m²</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
                                                 <div className="flex items-center justify-between mt-2">
                                                     <span className="text-lg font-semibold text-blue-600">
                                                         {formatPrice(selectedItem.basePrice)}

@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Head from 'next/head'
@@ -27,61 +26,6 @@ interface Filters {
     }
 }
 
-// Mock data com 3 leilões
-const mockAuctions = [
-    {
-        id: '1',
-        name: 'Leilão de Imóveis Residenciais - Centro SP',
-        type: 'ONLINE',
-        location: 'São Paulo/SP',
-        openingDate: new Date('2025-01-15T09:00:00'),
-        closingDate: new Date('2025-01-15T18:00:00'),
-        lots: [
-            {
-                id: 'lot1',
-                items: [
-                    { id: 'item1', title: 'Apartamento 2 quartos', basePrice: 250000, description: 'Apartamento no centro' },
-                    { id: 'item2', title: 'Casa 3 quartos', basePrice: 450000, description: 'Casa em bairro residencial' }
-                ]
-            }
-        ]
-    },
-    {
-        id: '2',
-        name: 'Leilão Presencial - Veículos Nacionais',
-        type: 'LOCAL',
-        location: 'Av. Paulista, 1000 - São Paulo/SP',
-        openingDate: new Date('2025-01-20T14:00:00'),
-        closingDate: new Date('2025-01-20T17:00:00'),
-        lots: [
-            {
-                id: 'lot2',
-                items: [
-                    { id: 'item3', title: 'Honda Civic 2020', basePrice: 85000, description: 'Veículo em excelente estado' },
-                    { id: 'item4', title: 'Toyota Corolla 2019', basePrice: 75000, description: 'Baixa quilometragem' }
-                ]
-            }
-        ]
-    },
-    {
-        id: '3',
-        name: 'Leilão Online - Equipamentos e Móveis',
-        type: 'ONLINE',
-        location: 'São Paulo/SP',
-        openingDate: new Date('2025-01-25T10:00:00'),
-        closingDate: new Date('2025-01-25T16:00:00'),
-        lots: [
-            {
-                id: 'lot3',
-                items: [
-                    { id: 'item5', title: 'Mesa de escritório', basePrice: 1200, description: 'Mesa executiva em madeira' },
-                    { id: 'item6', title: 'Cadeira ergonômica', basePrice: 800, description: 'Cadeira para escritório' }
-                ]
-            }
-        ]
-    }
-]
-
 function AuctionsPage({ user }: Props) {
     const router = useRouter()
     const [auctions, setAuctions] = useState<Auction[]>([])
@@ -90,7 +34,6 @@ function AuctionsPage({ user }: Props) {
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
     const [showFilters, setShowFilters] = useState(false)
     const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
-
     const [filters, setFilters] = useState<Filters>({
         search: '',
         auctionType: 'all',
@@ -120,8 +63,8 @@ function AuctionsPage({ user }: Props) {
     async function loadAuctions() {
         try {
             setLoading(true)
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            setAuctions(mockAuctions as any)
+            const data = await getAuctions()
+            setAuctions(data)
         } catch (error: any) {
             toast.error('Erro ao carregar leilões.')
             console.error('Erro ao carregar leilões:', error)
@@ -158,7 +101,6 @@ function AuctionsPage({ user }: Props) {
                 )
             )
         }
-
         if (filters.maxPrice !== null) {
             result = result.filter(auction =>
                 auction.lots?.some(lot =>
@@ -181,7 +123,6 @@ function AuctionsPage({ user }: Props) {
                 new Date(auction.openingDate) >= filters.dateRange.start!
             )
         }
-
         if (filters.dateRange.end) {
             result = result.filter(auction =>
                 new Date(auction.closingDate) <= filters.dateRange.end!
@@ -223,8 +164,8 @@ function AuctionsPage({ user }: Props) {
         }).format(price)
     }
 
-    const formatDate = (date: Date) => {
-        return new Intl.DateTimeFormat('pt-BR').format(date)
+    const formatDate = (date: Date | string) => {
+        return new Intl.DateTimeFormat('pt-BR').format(new Date(date))
     }
 
     const getAuctionItemsCount = (auction: Auction) => {
@@ -254,16 +195,8 @@ function AuctionsPage({ user }: Props) {
                                     Explore e participe dos melhores leilões online e presenciais
                                 </p>
                             </div>
-
                             <div className="flex items-center mt-4 md:mt-0 space-x-3">
-                                <button
-                                    onClick={() => setShowFilters(!showFilters)}
-                                    className="flex items-center text-gray-700 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                                >
-                                    <Filter className="h-4 w-4 mr-2" />
-                                    Filtros
-                                </button>
-
+                                
                                 <div className="flex border border-gray-300 rounded-lg overflow-hidden">
                                     <button
                                         onClick={() => setViewMode('grid')}
@@ -297,7 +230,6 @@ function AuctionsPage({ user }: Props) {
                                         Limpar tudo
                                     </button>
                                 </div>
-
                                 <div className="space-y-6">
                                     {/* Busca */}
                                     <div>
@@ -311,7 +243,7 @@ function AuctionsPage({ user }: Props) {
                                                 placeholder="Buscar leilões ou itens..."
                                                 value={filters.search}
                                                 onChange={(e) => handleFilterChange('search', e.target.value)}
-                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-300"
+                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700"
                                             />
                                         </div>
                                     </div>
@@ -344,7 +276,7 @@ function AuctionsPage({ user }: Props) {
                                                     placeholder="Mínimo"
                                                     value={filters.minPrice || ''}
                                                     onChange={(e) => handleFilterChange('minPrice', e.target.value ? Number(e.target.value) : null)}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-300"
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
                                                 />
                                             </div>
                                             <div>
@@ -353,7 +285,7 @@ function AuctionsPage({ user }: Props) {
                                                     placeholder="Máximo"
                                                     value={filters.maxPrice || ''}
                                                     onChange={(e) => handleFilterChange('maxPrice', e.target.value ? Number(e.target.value) : null)}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-300"
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
                                                 />
                                             </div>
                                         </div>
@@ -371,7 +303,7 @@ function AuctionsPage({ user }: Props) {
                                                 placeholder="Cidade, estado ou endereço"
                                                 value={filters.location}
                                                 onChange={(e) => handleFilterChange('location', e.target.value)}
-                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-300"
+                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700"
                                             />
                                         </div>
                                     </div>
@@ -414,7 +346,6 @@ function AuctionsPage({ user }: Props) {
                                     <h2 className="text-lg font-semibold text-gray-900">
                                         Leilões Disponíveis ({filteredAuctions.length})
                                     </h2>
-
                                     {filteredAuctions.length > 0 && (
                                         <p className="text-sm text-gray-600">
                                             Mostrando {Math.min(filteredAuctions.length, viewMode === 'grid' ? 6 : 10)} de {filteredAuctions.length} leilões
@@ -473,21 +404,18 @@ function AuctionsPage({ user }: Props) {
                                                             {auction.type === 'ONLINE' ? 'Online' : 'Presencial'}
                                                         </span>
                                                     </div>
-
                                                     <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                                                        {'Leilão de diversos itens com ótimas oportunidades.'}
+                                                        {auction.location || 'Leilão de diversos itens com ótimas oportunidades.'}
                                                     </p>
-
                                                     <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
                                                         <div className="flex items-center">
                                                             <Calendar className="h-4 w-4 mr-1" />
                                                             <span>
-                                                                {formatDate(new Date(auction.openingDate))}
+                                                                {formatDate(auction.openingDate)}
                                                             </span>
                                                         </div>
                                                         <span>{getAuctionItemsCount(auction)} itens</span>
                                                     </div>
-
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-sm font-medium text-gray-900">
                                                             Valor total: {formatPrice(getAuctionTotalValue(auction))}
@@ -514,7 +442,6 @@ function AuctionsPage({ user }: Props) {
                                                             <DollarSign className="h-8 w-8 text-gray-400" />
                                                         </div>
                                                     </div>
-
                                                     <div className="flex-grow">
                                                         <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-3">
                                                             <h3 className="font-semibold text-gray-900 text-lg">
@@ -524,22 +451,20 @@ function AuctionsPage({ user }: Props) {
                                                                 {auction.type === 'ONLINE' ? 'Online' : 'Presencial'}
                                                             </span>
                                                         </div>
-
                                                         <p className="text-gray-600 mb-4">
-                                                            {'Leilão de diversos itens com ótimas oportunidades.'}
+                                                            {auction.location || 'Leilão de diversos itens com ótimas oportunidades.'}
                                                         </p>
-
                                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                                             <div className="flex items-center  text-gray-600">
                                                                 <Calendar className="h-4 w-4 mr-2 text-gray-700" />
                                                                 <span>
-                                                                    Início: {formatDate(new Date(auction.openingDate))}
+                                                                    Início: {formatDate(auction.openingDate)}
                                                                 </span>
                                                             </div>
                                                             <div className="flex items-center text-gray-600">
                                                                 <Calendar className="h-4 w-4 mr-2 text-gray-700" />
                                                                 <span>
-                                                                    Término: {formatDate(new Date(auction.closingDate))}
+                                                                    Término: {formatDate(auction.closingDate)}
                                                                 </span>
                                                             </div>
                                                             <div className="flex items-center text-gray-600">
@@ -550,7 +475,6 @@ function AuctionsPage({ user }: Props) {
                                                             </div>
                                                         </div>
                                                     </div>
-
                                                     <div className="mt-4 md:mt-0 md:ml-6 md:text-right">
                                                         <div className="mb-2">
                                                             <span className="text-sm font-medium text-gray-900">
