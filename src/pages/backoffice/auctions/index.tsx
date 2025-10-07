@@ -23,7 +23,7 @@ import { Button } from '@/components/shared/Button'
 interface Auction {
   id?: string
   name: string
-  type: 'ONLINE' | 'CONVENTIONAL'
+  type: 'ONLINE' | 'PRESENCIAL'
   location?: string
   url?: string
   openingDate: string
@@ -270,7 +270,7 @@ function AuctionsAdminPage() {
                           className="w-full border text-gray-700  border-gray-300 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500"
                         >
                           <option value="ONLINE">Online</option>
-                          <option value="CONVENTIONAL">Convencional</option>
+                          <option value="PRESENCIAL">Presencial</option>
                         </select>
                       </div>
 
