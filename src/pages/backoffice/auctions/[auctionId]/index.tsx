@@ -646,7 +646,7 @@ function AuctionDetailPage() {
                           auctionStatus.color === 'red' ? 'text-red-900' :
                             'text-gray-900'
                         }`}>
-                        {auction.url || auction.location}
+                        {auction.type === 'ONLINE' ? auction.url: auction.location}
                       </div>
                     </div>
                   )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Head from 'next/head'
 import MainLayout from '@/layouts/MainLayout'
@@ -11,7 +11,6 @@ import { toast } from 'react-toastify'
 import {
     MapPin,
     Calendar,
-    Clock,
     ArrowLeft,
     ChevronDown,
     ChevronRight,
@@ -19,9 +18,7 @@ import {
     Car,
     Package,
     AlertTriangle,
-    DollarSign,
-    Eye,
-    Info
+    Eye
 } from 'lucide-react'
 
 interface Props {
@@ -44,7 +41,6 @@ interface AuctionItem {
     basePrice: number
     status: 'AVAILABLE' | 'SOLD' | 'CANCELLED'
     propertyDetails?: PropertyDetails
-    // Campos calculados para compatibilidade
     address?: string
     hasValidAddress?: boolean
 }
@@ -71,10 +67,17 @@ function AuctionDetailPage({ user }: Props) {
     const router = useRouter()
     const params = useParams<{ auctionId: string }>()
     const auctionId = params?.auctionId as string
+    
     const [auction, setAuction] = useState<Auction | null>(null)
     const [loading, setLoading] = useState(true)
     const [expandedLots, setExpandedLots] = useState<{ [key: string]: boolean }>({})
     const [selectedItem, setSelectedItem] = useState<AuctionItem | null>(null)
+    const [mapLoaded, setMapLoaded] = useState(false)
+    
+    const mapRef = useRef<HTMLDivElement>(null)
+    const googleMapRef = useRef<any>(null)
+    const markersRef = useRef<any[]>([])
+    const infoWindowRef = useRef<any>(null)
 
     useEffect(() => {
         if (auctionId) {
@@ -82,20 +85,52 @@ function AuctionDetailPage({ user }: Props) {
         }
     }, [auctionId])
 
+    useEffect(() => {
+        loadGoogleMaps()
+    }, [])
+
+    useEffect(() => {
+        if (mapLoaded && auction && mapRef.current && !googleMapRef.current) {
+            initializeMap()
+        }
+    }, [mapLoaded, auction])
+
+    useEffect(() => {
+        if (googleMapRef.current && auction) {
+            updateMarkers()
+        }
+    }, [auction, selectedItem])
+
+    const loadGoogleMaps = () => {
+        if (window.google && window.google.maps) {
+            setMapLoaded(true)
+            return
+        }
+
+        const script = document.createElement('script')
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`
+        script.async = true
+        script.defer = true
+        script.onload = () => setMapLoaded(true)
+        script.onerror = () => {
+            console.error('Erro ao carregar Google Maps')
+            toast.error('Erro ao carregar mapa')
+        }
+        document.head.appendChild(script)
+    }
+
     async function loadAuctionDetail() {
         try {
             setLoading(true)
             const auctionData = await getAuctionById(auctionId)
             
             if (auctionData) {
-                // Processar os dados para adicionar campos calculados
                 const processedAuction = {
                     ...auctionData,
                     lots: auctionData.lots?.map((lot: any) => ({
                         ...lot,
                         items: lot.items?.map((item: any) => ({
                             ...item,
-                            // Para fins de demonstração, vamos simular endereços baseados no tipo
                             address: generateMockAddress(item),
                             hasValidAddress: shouldHaveAddress(item)
                         })) || []
@@ -104,7 +139,6 @@ function AuctionDetailPage({ user }: Props) {
                 
                 setAuction(processedAuction)
                 
-                // Expandir todos os lotes por padrão
                 const expanded: { [key: string]: boolean } = {}
                 processedAuction.lots.forEach((lot: any) => {
                     expanded[lot.id] = true
@@ -119,7 +153,6 @@ function AuctionDetailPage({ user }: Props) {
         }
     }
 
-    // Função auxiliar para gerar endereços mock (substituir por lógica real)
     const generateMockAddress = (item: AuctionItem) => {
         if (item.type === 'IMOVEL') {
             const streets = ['Rua Harmonia', 'Rua Augusta', 'Av. Paulista', 'Rua Oscar Freire']
@@ -132,14 +165,114 @@ function AuctionDetailPage({ user }: Props) {
         if (item.type === 'VEICULO') {
             return 'Av. Paulista, 1000 - Bela Vista, São Paulo/SP'
         }
-        // Para OUTROS, alguns têm endereço, outros não
         return Math.random() > 0.5 ? 'Rua das Flores, 789 - Vila Olímpia, São Paulo/SP' : undefined
     }
 
     const shouldHaveAddress = (item: AuctionItem) => {
-        // Lógica para determinar se o item deve ter endereço
         if (item.type === 'IMOVEL' || item.type === 'VEICULO') return true
-        return Math.random() > 0.3 // 70% dos outros itens têm endereço
+        return Math.random() > 0.3
+    }
+
+    const initializeMap = () => {
+        if (!mapRef.current) return
+
+        const map = new google.maps.Map(mapRef.current, {
+            zoom: 12,
+            center: { lat: -23.5505, lng: -46.6333 },
+            mapTypeControl: true,
+            streetViewControl: true,
+            fullscreenControl: true,
+        })
+
+        googleMapRef.current = map
+        infoWindowRef.current = new google.maps.InfoWindow()
+        updateMarkers()
+    }
+
+    const updateMarkers = async () => {
+        if (!googleMapRef.current || !auction) return
+
+        markersRef.current.forEach(marker => marker.setMap(null))
+        markersRef.current = []
+
+        const itemsWithAddress = getItemsWithValidAddress()
+        if (itemsWithAddress.length === 0) return
+
+        const bounds = new google.maps.LatLngBounds()
+        const geocoder = new google.maps.Geocoder()
+
+        for (const item of itemsWithAddress) {
+            if (!item.address) continue
+
+            try {
+                const result = await geocodeAddress(geocoder, item.address)
+                if (result) {
+                    const isSelected = selectedItem?.id === item.id
+                    
+                    const marker = new google.maps.Marker({
+                        position: result,
+                        map: googleMapRef.current,
+                        title: item.title,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: isSelected ? 12 : 8,
+                            fillColor: getMarkerColor(item.type),
+                            fillOpacity: isSelected ? 1 : 0.8,
+                            strokeColor: '#ffffff',
+                            strokeWeight: 2,
+                        },
+                    })
+
+                    marker.addListener('click', () => {
+                        setSelectedItem(item)
+                        if (infoWindowRef.current) {
+                            infoWindowRef.current.setContent(`
+                                <div style="padding: 8px; max-width: 250px;">
+                                    <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">${item.title}</h3>
+                                    <p style="margin: 4px 0; font-size: 12px; color: #666;">${item.address}</p>
+                                    <p style="margin: 4px 0; font-size: 14px; font-weight: 600; color: #2563eb;">
+                                        ${formatPrice(item.basePrice)}
+                                    </p>
+                                </div>
+                            `)
+                            infoWindowRef.current.open(googleMapRef.current, marker)
+                        }
+                    })
+
+                    markersRef.current.push(marker)
+                    bounds.extend(result)
+                }
+            } catch (error) {
+                console.error(`Erro ao geocodificar: ${item.address}`, error)
+            }
+        }
+
+        if (markersRef.current.length > 0) {
+            googleMapRef.current.fitBounds(bounds)
+        }
+    }
+
+    const geocodeAddress = (
+        geocoder: google.maps.Geocoder,
+        address: string
+    ): Promise<google.maps.LatLng | null> => {
+        return new Promise((resolve) => {
+            geocoder.geocode({ address }, (results, status) => {
+                if (status === 'OK' && results && results[0]) {
+                    resolve(results[0].geometry.location)
+                } else {
+                    resolve(null)
+                }
+            })
+        })
+    }
+
+    const getMarkerColor = (type: string) => {
+        switch (type) {
+            case 'IMOVEL': return '#3b82f6'
+            case 'VEICULO': return '#10b981'
+            default: return '#8b5cf6'
+        }
     }
 
     const toggleLot = (lotId: string) => {
@@ -287,7 +420,7 @@ function AuctionDetailPage({ user }: Props) {
 
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <div className="flex flex-col lg:flex-row gap-8">
-                        {/* Sidebar com Lotes e Itens */}
+                        {/* Sidebar */}
                         <div className="lg:w-1/3">
                             <div className="bg-white rounded-lg shadow-sm border p-6 sticky top-24">
                                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Lotes e Itens</h2>
@@ -315,8 +448,11 @@ function AuctionDetailPage({ user }: Props) {
                                                     {lot.items.map((item) => (
                                                         <div
                                                             key={item.id}
-                                                            className={`flex items-center gap-3 p-3 hover:bg-gray-50 transition cursor-pointer border-l-4 ${selectedItem?.id === item.id ? 'border-blue-500 bg-blue-50' : 'border-transparent'
-                                                                }`}
+                                                            className={`flex items-center gap-3 p-3 hover:bg-gray-50 transition cursor-pointer border-l-4 ${
+                                                                selectedItem?.id === item.id 
+                                                                    ? 'border-blue-500 bg-blue-50' 
+                                                                    : 'border-transparent'
+                                                            }`}
                                                             onClick={() => setSelectedItem(item)}
                                                         >
                                                             <div className="flex items-center gap-2">
@@ -348,17 +484,17 @@ function AuctionDetailPage({ user }: Props) {
                                             <h3 className="font-medium text-yellow-800">Atenção</h3>
                                         </div>
                                         <p className="text-sm text-yellow-700">
-                                            {getItemsWithoutAddress().length} {getItemsWithoutAddress().length === 1 ? 'item não possui' : 'itens não possuem'} endereço válido e não {getItemsWithoutAddress().length === 1 ? 'está sendo exibido' : 'estão sendo exibidos'} no mapa.
+                                            {getItemsWithoutAddress().length} {getItemsWithoutAddress().length === 1 ? 'item não possui' : 'itens não possuem'} endereço válido.
                                         </p>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Área Principal - Mapa */}
+                        {/* Mapa */}
                         <div className="lg:w-2/3">
                             <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-                                <div className="p-6 border-b border-gray-200">
+                                <div className="p-6 border-b">
                                     <div className="flex items-center justify-between">
                                         <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                                             <MapPin className="h-5 w-5" />
@@ -370,30 +506,29 @@ function AuctionDetailPage({ user }: Props) {
                                     </div>
                                 </div>
 
-                                <div className="aspect-video bg-gray-100 flex items-center justify-center">
-                                    <div className="text-center text-gray-500">
-                                        <MapPin className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                                        <p className="font-medium text-lg">Mapa do Google Maps</p>
-                                        <p className="text-sm mt-1">
-                                            Mostrando {getItemsWithValidAddress().length} {getItemsWithValidAddress().length === 1 ? 'item' : 'itens'} com endereço válido
-                                        </p>
-                                        {selectedItem && selectedItem.hasValidAddress && (
-                                            <div className="mt-4 p-4 bg-white rounded-lg shadow-sm border max-w-sm mx-auto">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    {getItemTypeIcon(selectedItem.type)}
-                                                    <span className="font-medium text-gray-900">{selectedItem.title}</span>
-                                                </div>
-                                                <p className="text-sm text-gray-600">{selectedItem.address}</p>
-                                                <p className="text-sm font-medium text-blue-600 mt-1">
-                                                    {formatPrice(selectedItem.basePrice)}
-                                                </p>
+                                <div className="aspect-video bg-gray-100 relative">
+                                    {!mapLoaded && (
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="text-center">
+                                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                                                <p className="text-gray-600">Carregando mapa...</p>
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
+                                    {mapLoaded && getItemsWithValidAddress().length === 0 && (
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="text-center text-gray-500">
+                                                <MapPin className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                                                <p className="font-medium text-lg">Nenhum item com endereço</p>
+                                                <p className="text-sm mt-1">Adicione endereços para visualizar no mapa</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div ref={mapRef} className="w-full h-full" />
                                 </div>
 
                                 {selectedItem && (
-                                    <div className="p-6 border-t border-gray-200 bg-gray-50">
+                                    <div className="p-6 border-t bg-gray-50">
                                         <h4 className="font-medium text-gray-900 mb-2">Item Selecionado</h4>
                                         <div className="flex items-start gap-4">
                                             <div className="flex items-center gap-2 text-gray-600">
@@ -408,7 +543,6 @@ function AuctionDetailPage({ user }: Props) {
                                                     <p className="text-sm text-gray-600 mt-1">{selectedItem.description}</p>
                                                 )}
                                                 
-                                                {/* Detalhes específicos do imóvel */}
                                                 {selectedItem.type === 'IMOVEL' && selectedItem.propertyDetails && (
                                                     <div className="mt-2 text-sm text-gray-600">
                                                         <div className="flex gap-4">
