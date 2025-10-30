@@ -1,13 +1,13 @@
 import { api } from './api'
 import { AxiosError } from 'axios'
+import { Auction, CreateAuctionData, UpdateAuctionData } from '@/types/auction'
 
 /**
  * Cria um novo leilão
- * @param data Dados do leilão (name, type, location, url, openingDate, closingDate, createdBy)
+ * @param data Dados do leilão (name, type, url, openingDate, closingDate, createdBy)
  * @returns Dados do leilão criado
- * @throws Erro em caso de falha na requisição
  */
-export async function createAuction(data: any) {
+export async function createAuction(data: CreateAuctionData) {
   try {
     const response = await api.post('/auctions', data)
     return response.data
@@ -24,7 +24,7 @@ export async function createAuction(data: any) {
 export async function getAuctions() {
   try {
     const response = await api.get('/auctions')
-    return response.data
+    return response.data as Auction[]
   } catch (error) {
     console.error('Erro ao buscar leilões:', error)
     throw error
@@ -38,9 +38,9 @@ export async function getAuctions() {
  */
 export async function getAuctionById(id: string) {
   try {
-    console.log('ID do leilão:', id) // Log do ID recebido
+    console.log('ID do leilão:', id)
     const response = await api.get(`/auctions/${id}`)
-    return response.data
+    return response.data as Auction
   } catch (error) {
     console.error(`Erro ao buscar leilão ID ${id}:`, error)
     throw error
@@ -52,7 +52,7 @@ export async function getAuctionById(id: string) {
  * @param id ID do leilão
  * @param data Novos dados
  */
-export async function updateAuction(id: string, data: any) {
+export async function updateAuction(id: string, data: UpdateAuctionData) {
   try {
     const response = await api.patch(`/auctions/${id}`, data)
     return response.data
@@ -75,3 +75,14 @@ export async function deleteAuction(id: string) {
     throw error
   }
 }
+
+/**
+ * Obtém todos os itens de leilão
+ * @returns Lista de itens de leilão
+ */
+
+export async function getAuctionItems() {
+  const response = await api.get('/auctions/items/all')
+  return response.data
+}
+

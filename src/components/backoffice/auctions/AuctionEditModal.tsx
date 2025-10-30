@@ -2,7 +2,7 @@ import React, { Fragment, useState, useEffect } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { Button } from '@/components/shared/Button'
 import { Input } from '@/components/shared/Input'
-import { Globe, MapPin, Calendar, Clock, X } from 'lucide-react'
+import { Calendar, Clock, X } from 'lucide-react'
 
 interface AuctionEditModalProps {
     isOpen: boolean
@@ -17,35 +17,37 @@ export default function AuctionEditModal({
     onClose,
     onSave,
     auction,
-    isLoading = false
+    isLoading = false,
 }: AuctionEditModalProps) {
     const [formData, setFormData] = useState({
         name: '',
         type: 'ONLINE',
-        location: '',
         url: '',
         openingDate: '',
-        closingDate: ''
+        closingDate: '',
     })
 
-    // Atualizar formData quando o auction mudar
+    // 🔹 Atualiza o form quando o auction mudar
     useEffect(() => {
         if (auction) {
             setFormData({
                 name: auction.name || '',
                 type: auction.type || 'ONLINE',
-                location: auction.location || '',
                 url: auction.url || '',
-                openingDate: auction.openingDate ? new Date(auction.openingDate).toISOString().slice(0, 16) : '',
-                closingDate: auction.closingDate ? new Date(auction.closingDate).toISOString().slice(0, 16) : ''
+                openingDate: auction.openingDate
+                    ? new Date(auction.openingDate).toISOString().slice(0, 16)
+                    : '',
+                closingDate: auction.closingDate
+                    ? new Date(auction.closingDate).toISOString().slice(0, 16)
+                    : '',
             })
         }
     }, [auction])
 
     const handleInputChange = (field: string, value: string) => {
-        setFormData(prev => ({
+        setFormData((prev) => ({
             ...prev,
-            [field]: value
+            [field]: value,
         }))
     }
 
@@ -55,7 +57,7 @@ export default function AuctionEditModal({
             ...formData,
             openingDate: new Date(formData.openingDate).toISOString(),
             closingDate: new Date(formData.closingDate).toISOString(),
-            updatedBy: 'system'
+            updatedBy: 'system',
         })
     }
 
@@ -109,12 +111,13 @@ export default function AuctionEditModal({
                                 </div>
 
                                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                                    {/* Informações Básicas */}
+                                    {/* 🧾 Informações Básicas */}
                                     <div className="space-y-4">
                                         <h4 className="text-md font-medium text-gray-900 pb-2 border-b border-gray-200">
                                             Informações Básicas
                                         </h4>
-                                        
+
+                                        {/* Nome */}
                                         <div>
                                             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                                                 Nome do Leilão *
@@ -127,10 +130,10 @@ export default function AuctionEditModal({
                                                 onChange={(e) => handleInputChange('name', e.target.value)}
                                                 required
                                                 disabled={isLoading}
-                                                placeholder="Ex: Leilão de Imóveis - Janeiro 2025"
                                             />
                                         </div>
 
+                                        {/* Tipo */}
                                         <div>
                                             <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
                                                 Tipo do Leilão *
@@ -140,95 +143,32 @@ export default function AuctionEditModal({
                                                 value={formData.type}
                                                 onChange={(e) => handleInputChange('type', e.target.value)}
                                                 required
-                                                className="w-full border border-gray-300 rounded-md shadow-sm text-gray-700 p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
                                                 disabled={isLoading}
+                                                className="w-full border border-gray-300 rounded-md shadow-sm text-gray-700 p-2 focus:ring-yellow-500 focus:border-yellow-500"
                                             >
                                                 <option value="ONLINE">Online</option>
                                                 <option value="LOCAL">Presencial</option>
                                             </select>
                                         </div>
 
-                                        {/* Campo condicional principal baseado no tipo */}
-                                        {formData.type === 'LOCAL' && (
-                                            <div>
-                                                <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-                                                    <MapPin className="inline h-4 w-4 mr-1" />
-                                                    Local do Leilão
-                                                </label>
-                                                <Input
-                                                    id="location"
-                                                    name="location"
-                                                    type="text"
-                                                    value={formData.location}
-                                                    onChange={(e) => handleInputChange('location', e.target.value)}
-                                                    disabled={isLoading}
-                                                    placeholder="Ex: Av. Paulista, 1000 - São Paulo/SP"
-                                                />
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    Endereço completo onde o leilão será realizado
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {formData.type === 'ONLINE' && (
-                                                <>
-                                                    <div>
-                                                        <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
-                                                            URL
-                                                        </label>
-                                                        <Input
-                                                            id="url"
-                                                            name="url"
-                                                            type="url"
-                                                            value={formData.url}
-                                                            onChange={(e) => handleInputChange('url', e.target.value)}
-                                                            disabled={isLoading}
-                                                            placeholder="https://exemplo.com/leilao"
-                                                        />
-                                                        <p className="text-xs text-gray-500 mt-1">
-                                                            Link onde o leilão online será realizado
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-                                                            Local de Referência (Opcional)
-                                                        </label>
-                                                        <Input
-                                                            id="location"
-                                                            name="location"
-                                                            type="text"
-                                                            value={formData.location}
-                                                            onChange={(e) => handleInputChange('location', e.target.value)}
-                                                            disabled={isLoading}
-                                                            placeholder="Ex: Sede - São Paulo/SP"
-                                                        />
-                                                    </div>
-                                                </>
-                                            )}
-
-                                            {formData.type === 'LOCAL' && (
-                                                <div className="md:col-span-2">
-                                                    <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
-                                                        URL (Opcional)
-                                                    </label>
-                                                    <Input
-                                                        id="url"
-                                                        name="url"
-                                                        type="url"
-                                                        value={formData.url}
-                                                        onChange={(e) => handleInputChange('url', e.target.value)}
-                                                        disabled={isLoading}
-                                                        placeholder="https://exemplo.com/transmissao"
-                                                    />
-                                                </div>
-                                            )}
+                                        {/* URL */}
+                                        <div>
+                                            <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
+                                                URL
+                                            </label>
+                                            <Input
+                                                id="url"
+                                                name="url"
+                                                type="url"
+                                                value={formData.url}
+                                                onChange={(e) => handleInputChange('url', e.target.value)}
+                                                disabled={isLoading}
+                                                placeholder="https://exemplo.com/leilao"
+                                            />
                                         </div>
-
-
                                     </div>
 
-                                    {/* Datas */}
+                                    {/* 🗓️ Datas */}
                                     <div className="space-y-4">
                                         <h4 className="text-md font-medium text-gray-900 pb-2 border-b border-gray-200">
                                             <Calendar className="inline h-4 w-4 mr-2" />

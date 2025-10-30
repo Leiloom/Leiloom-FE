@@ -1,12 +1,17 @@
 import { api } from './api'
 import { AxiosError } from 'axios'
+import {
+  AuctionItem,
+  CreateAuctionItemData,
+  UpdateAuctionItemData,
+} from '@/types/auction'
 
 /**
  * Cria um novo item de leilão (vinculado a um lote)
  * Pode incluir detalhes de imóvel (propertyDetails)
- * @param data Dados do item (deve incluir lotId)
+ * @param data Dados do item (deve incluir lotId e auctionId)
  */
-export async function createAuctionItem(data: any) {
+export async function createAuctionItem(data: CreateAuctionItemData): Promise<AuctionItem> {
   try {
     const response = await api.post('/auction-items', data)
     return response.data
@@ -22,18 +27,18 @@ export async function createAuctionItem(data: any) {
  * @param auctionId ID do leilão (opcional)
  * @returns Lista de itens
  */
-export async function getAuctionItems(lotId?: string, auctionId?: string) {
+export async function getAuctionItems(lotId?: string, auctionId?: string): Promise<AuctionItem[]> {
   try {
     let url = '/auction-items'
     const params = new URLSearchParams()
-    
+
     if (lotId) params.append('lotId', lotId)
     if (auctionId) params.append('auctionId', auctionId)
-    
+
     if (params.toString()) {
       url += `?${params.toString()}`
     }
-    
+
     const response = await api.get(url)
     return response.data
   } catch (error) {
@@ -47,9 +52,9 @@ export async function getAuctionItems(lotId?: string, auctionId?: string) {
  * @param lotId ID do lote
  * @returns Lista de itens do lote
  */
-export async function getAuctionItemsByLot(lotId: string) {
+export async function getAuctionItemsByLot(lotId: string): Promise<AuctionItem[]> {
   try {
-    const response = await api.get(`/auction-items?lotId=${lotId}`)
+    const response = await api.get(`/auction-items/by-lot/${lotId}`)
     return response.data
   } catch (error) {
     console.error(`Erro ao buscar itens do lote ID ${lotId}:`, error)
@@ -62,9 +67,9 @@ export async function getAuctionItemsByLot(lotId: string) {
  * @param auctionId ID do leilão
  * @returns Lista de itens do leilão
  */
-export async function getAuctionItemsByAuction(auctionId: string) {
+export async function getAuctionItemsByAuction(auctionId: string): Promise<AuctionItem[]> {
   try {
-    const response = await api.get(`/auction-items?auctionId=${auctionId}`)
+    const response = await api.get(`/auction-items/by-auction/${auctionId}`)
     return response.data
   } catch (error) {
     console.error(`Erro ao buscar itens do leilão ID ${auctionId}:`, error)
@@ -75,8 +80,9 @@ export async function getAuctionItemsByAuction(auctionId: string) {
 /**
  * Busca um item pelo ID
  * @param id ID do item
+ * @returns Dados completos do item (com propertyDetails, lot e auction)
  */
-export async function getAuctionItemById(id: string) {
+export async function getAuctionItemById(id: string): Promise<AuctionItem> {
   try {
     const response = await api.get(`/auction-items/${id}`)
     return response.data
@@ -91,7 +97,10 @@ export async function getAuctionItemById(id: string) {
  * @param id ID do item
  * @param data Novos dados (incluindo propertyDetails se for imóvel e lotId se mudar de lote)
  */
-export async function updateAuctionItem(id: string, data: any) {
+export async function updateAuctionItem(
+  id: string,
+  data: UpdateAuctionItemData
+): Promise<AuctionItem> {
   try {
     const response = await api.patch(`/auction-items/${id}`, data)
     return response.data
@@ -105,7 +114,7 @@ export async function updateAuctionItem(id: string, data: any) {
  * Remove (cancela) um item de leilão
  * @param id ID do item
  */
-export async function deleteAuctionItem(id: string) {
+export async function deleteAuctionItem(id: string): Promise<AuctionItem> {
   try {
     const response = await api.delete(`/auction-items/${id}`)
     return response.data
