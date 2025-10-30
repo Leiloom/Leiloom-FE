@@ -36,7 +36,15 @@ export interface AuctionItem {
   status: ItemStatus
   createdOn: string
   updatedOn: string
-  
+
+  // 🆕 Campos geográficos
+  state?: string
+  city?: string
+  location?: string
+  zipCode?: string
+  lat?: number
+  lng?: number
+
   // Relacionamentos
   auction?: Auction
   lot?: Lot
@@ -59,7 +67,6 @@ export interface Auction {
   id: string
   name: string
   type: AuctionType
-  location?: string
   url?: string
   openingDate: string
   closingDate: string
@@ -70,13 +77,14 @@ export interface Auction {
   updatedOn?: string
   
   lots?: Lot[]
-  items?: AuctionItem[] 
+  items?: AuctionItem[]
 }
+
+// ✅ DTOs
 
 export interface CreateAuctionData {
   name: string
   type: AuctionType
-  location?: string
   url?: string
   openingDate: string
   closingDate: string
@@ -97,19 +105,32 @@ export interface PropertyDetailsData {
 
 export interface CreateAuctionItemData {
   lotId: string
+  auctionId: string
   title: string
   description?: string
   type: ItemType
   basePrice: number | string
   increment: number | string
   status?: ItemStatus
+
+  // 🆕 Endereço e coordenadas
+  state?: string
+  city?: string
+  location?: string
+  zipCode?: string
+  lat?: number
+  lng?: number
+
   propertyDetails?: PropertyDetailsData
 }
 
-// DTOs para atualização
+// DTOs de atualização
 export interface UpdateAuctionData extends Partial<CreateAuctionData> {
   updatedBy?: string
+  isActive?: boolean
+  type?: AuctionType
 }
+
 
 export interface UpdateLotData extends Partial<CreateLotData> {}
 

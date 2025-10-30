@@ -31,31 +31,11 @@ import {
   ChevronRight
 } from 'lucide-react'
 
-// Types atualizados com a nova estrutura
-interface PropertyAuction {
-  id: string
-  auctionItemId: string
-  type: string
-  bedrooms?: number
-  parkingSpots?: number
-  area?: number
-}
+import { AuctionItem, AuctionType } from '@/types/auction'
 
-interface AuctionItem {
-  id: string
-  auctionId: string
-  lotId: string
-  title: string
-  description?: string
-  type: 'IMOVEL' | 'VEICULO' | 'OUTROS'
-  basePrice: number
-  increment: number
-  status: 'AVAILABLE' | 'SOLD' | 'CANCELLED'
-  createdOn: string
-  updatedOn: string
-  propertyDetails?: PropertyAuction
-  lot?: Lot
-}
+// Types atualizados com a nova estrutura
+
+
 
 interface Lot {
   id: string
@@ -70,7 +50,6 @@ interface Auction {
   id: string
   name: string
   type: 'ONLINE' | 'LOCAL'
-  location?: string
   url?: string
   openingDate: string
   closingDate: string
@@ -105,6 +84,45 @@ function AuctionDetailPage() {
   const [editingItem, setEditingItem] = useState<AuctionItem | null>(null)
   const [selectedLotId, setSelectedLotId] = useState<string>('')
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false)
+
+  const [states, setStates] = useState<{ id: number; sigla: string; nome: string }[]>([])
+  const [cities, setCities] = useState<{ id: number; nome: string }[]>([])
+  const [selectedState, setSelectedState] = useState(editingItem?.state || '')
+  const [selectedCity, setSelectedCity] = useState(editingItem?.city || '')
+
+
+
+  useEffect(() => {
+    fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome')
+      .then(res => res.json())
+      .then(data => setStates(data))
+      .catch(() => toast.error('Erro ao carregar estados do IBGE'))
+  }, [])
+
+  useEffect(() => {
+    if (!selectedState) {
+      setCities([])
+      return
+    }
+
+    fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${selectedState}/municipios`)
+      .then(res => res.json())
+      .then(data => setCities(data))
+      .catch(() => toast.error('Erro ao carregar cidades do IBGE'))
+  }, [selectedState])
+
+  // Resetar ao abrir modal
+  useEffect(() => {
+    if (itemAction === 'create') {
+      setSelectedState('')
+      setSelectedCity('')
+    } else if (editingItem) {
+      setSelectedState(editingItem.state || '')
+      setSelectedCity(editingItem.city || '')
+    }
+  }, [isItemModalOpen, editingItem, itemAction])
+
+
 
   const handleEditAuction = () => {
     setIsEditModalOpen(true)
@@ -366,8 +384,13 @@ function AuctionDetailPage() {
         type: formData.get('type') as string,
         basePrice: parseFloat(formData.get('basePrice') as string),
         increment: parseFloat(formData.get('increment') as string),
+        state: selectedState,
+        city: selectedCity,
+        zipCode: formData.get('zipCode') as string,
+        location: formData.get('location') as string,
         status: formData.get('status') as string || 'AVAILABLE'
       }
+
 
       if (itemData.type === 'IMOVEL') {
         const propertyType = formData.get('propertyType') as string
@@ -429,8 +452,10 @@ function AuctionDetailPage() {
     try {
       await updateAuction(auctionId, {
         ...auction,
-        updatedBy: 'system'
+        type: auction.type as AuctionType,
+        updatedBy: 'system',
       })
+
       toast.success('Leilão atualizado com sucesso!')
     } catch (error) {
       toast.error('Erro ao atualizar leilão')
@@ -632,9 +657,11 @@ function AuctionDetailPage() {
                       {availableItems} disponíveis / {totalItems} total
                     </div>
                   </div>
-                  {(auction.location || auction.url) && (
+
+
+                  {(auction.url) && (
                     <div>
-                      <span className={`font-medium ${auctionStatus.color === 'green' ? 'text-green-700' :
+                      <span className={`font-medium truncate ${auctionStatus.color === 'green' ? 'text-green-700' :
                         auctionStatus.color === 'blue' ? 'text-blue-700' :
                           auctionStatus.color === 'red' ? 'text-red-700' :
                             'text-gray-700'
@@ -646,7 +673,7 @@ function AuctionDetailPage() {
                           auctionStatus.color === 'red' ? 'text-red-900' :
                             'text-gray-900'
                         }`}>
-                        {auction.url || auction.location}
+                        {auction.url}
                       </div>
                     </div>
                   )}
@@ -796,6 +823,9 @@ function AuctionDetailPage() {
                                   Incremento
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Localização
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                   Status
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -815,11 +845,6 @@ function AuctionDetailPage() {
                                       <div className="text-sm font-medium text-gray-900">
                                         {item.title}
                                       </div>
-                                      {item.description && (
-                                        <div className="text-xs text-gray-500 truncate max-w-xs">
-                                          {item.description}
-                                        </div>
-                                      )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       <div className="flex items-center text-sm text-gray-900">
@@ -832,6 +857,17 @@ function AuctionDetailPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                       {formatPrice(item.increment)}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      {item.city || item.state || item.location ? (
+                                        <div className="space-y-1">
+                                          <div>{item.city} - {item.state}</div>
+                                          {item.location && <div className="text-xs">{item.location}</div>}
+                                          {item.zipCode && <div className="text-xs text-gray-400">CEP: {item.zipCode}</div>}
+                                        </div>
+                                      ) : (
+                                        <span className="text-gray-400">-</span>
+                                      )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       {getStatusBadge(item.status)}
@@ -1006,7 +1042,7 @@ function AuctionDetailPage() {
                       <textarea
                         id="description"
                         name="description"
-                        rows={7}
+                        rows={5}
                         placeholder="Descreva detalhes importantes sobre o item..."
                         defaultValue={editingItem?.description}
                         className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
@@ -1049,7 +1085,94 @@ function AuctionDetailPage() {
                         />
                       </div>
                     </div>
+
+                    {/* Localização */}
+                    <div className="space-y-4">
+                      <h3 className="text-md font-medium text-gray-900">Localização do Item</h3>
+
+                      {/* Estado e Cidade na mesma linha */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
+                            Estado *
+                          </label>
+                          <select
+                            id="state"
+                            name="state"
+                            value={selectedState}
+                            onChange={(e) => {
+                              setSelectedState(e.target.value)
+                              setSelectedCity('')
+                            }}
+                            required
+                            className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                            disabled={isLoading}
+                          >
+                            <option value="">Selecione um estado...</option>
+                            {states.map((state) => (
+                              <option key={state.id} value={state.sigla}>
+                                {state.nome} ({state.sigla})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
+                            Cidade *
+                          </label>
+                          <select
+                            id="city"
+                            name="city"
+                            value={selectedCity}
+                            onChange={(e) => setSelectedCity(e.target.value)}
+                            required
+                            className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                            disabled={isLoading || !selectedState}
+                          >
+                            <option value="">Selecione uma cidade...</option>
+                            {cities.map((city) => (
+                              <option key={city.id} value={city.nome}>
+                                {city.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Endereço maior */}
+                      <div>
+                        <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                          Endereço
+                        </label>
+                        <textarea
+                          id="location"
+                          name="location"
+                          rows={3}
+                          placeholder="Rua, número, bairro, complemento..."
+                          defaultValue={editingItem?.location || ''}
+                          className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors resize-none"
+                          disabled={isLoading}
+                        />
+                      </div>
+
+                      {/* CEP abaixo, menor */}
+                      <div className="w-full md:w-1/2">
+                        <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700 mb-1">
+                          CEP
+                        </label>
+                        <Input
+                          id="zipCode"
+                          name="zipCode"
+                          type="text"
+                          placeholder="Ex: 90000-000"
+                          defaultValue={editingItem?.zipCode || ''}
+                          disabled={isLoading}
+                        />
+                      </div>
+                    </div>
                   </div>
+
 
                   {/* Detalhes do Imóvel - só aparece se type === IMOVEL */}
                   <div

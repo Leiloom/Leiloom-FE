@@ -1,14 +1,18 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Head from 'next/head'
 import MainLayout from '@/layouts/MainLayout'
 import { withClientAuth } from '@/hooks/withClientAuth'
 import { TokenPayload } from '@/utils/jwtUtils'
-import { Auction, AuctionItem, Lot } from '@/types/auction'
+import { Auction } from '@/types/auction'
 import { getAuctions } from '@/services/auctionService'
 import { toast } from 'react-toastify'
-import { MapPin, Filter, Search, Grid, List, Calendar, DollarSign } from 'lucide-react'
+import { MapPin, Search, Grid, List } from 'lucide-react'
+import { MultiSelectDropdown } from '@/components/shared/MultiSelectDropdown'
+import { Button } from '@/components/shared/Button'
+import AuctionMap from '@/components/maps/AuctionMap'
 
 interface Props {
     user: TokenPayload
@@ -24,6 +28,8 @@ interface Filters {
         start: Date | null
         end: Date | null
     }
+    states?: string[]
+    cities?: string[]
 }
 
 function AuctionsPage({ user }: Props) {
@@ -34,17 +40,24 @@ function AuctionsPage({ user }: Props) {
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
     const [showFilters, setShowFilters] = useState(false)
     const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
+
     const [filters, setFilters] = useState<Filters>({
         search: '',
         auctionType: 'all',
         minPrice: null,
         maxPrice: null,
         location: '',
-        dateRange: {
-            start: null,
-            end: null
-        }
+        dateRange: { start: null, end: null },
+        states: [],
+        cities: []
     })
+
+    const [pendingFilters, setPendingFilters] = useState<Filters>({ ...filters })
+
+    const [states, setStates] = useState<{ id: number; sigla: string; nome: string }[]>([])
+    const [cities, setCities] = useState<{ id: number; nome: string }[]>([])
+    const [selectedStates, setSelectedStates] = useState<string[]>([])
+    const [selectedCities, setSelectedCities] = useState<string[]>([])
 
     useEffect(() => {
         loadAuctions()
@@ -55,10 +68,34 @@ function AuctionsPage({ user }: Props) {
     }, [filters, auctions])
 
     useEffect(() => {
-        if (selectedAuction) {
-            router.push(`/auctions/${selectedAuction.id}`)
-        }
+        if (selectedAuction) router.push(`/auctions/${selectedAuction.id}`)
     }, [selectedAuction, router])
+
+    useEffect(() => {
+        fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome')
+            .then((res) => res.json())
+            .then((data) => setStates(data))
+            .catch(() => toast.error('Erro ao carregar estados do IBGE'))
+    }, [])
+
+    useEffect(() => {
+        if (selectedStates.length === 0) {
+            setCities([])
+            setSelectedCities([])
+            return
+        }
+
+        Promise.all(
+            selectedStates.map((uf) =>
+                fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`)
+                    .then((res) => res.json())
+                    .catch(() => [])
+            )
+        ).then((responses) => {
+            const allCities = responses.flat()
+            setCities(allCities)
+        })
+    }, [selectedStates])
 
     async function loadAuctions() {
         try {
@@ -73,119 +110,202 @@ function AuctionsPage({ user }: Props) {
         }
     }
 
+    const applyManualFilters = () => {
+        setFilters({
+            ...pendingFilters,
+            states: selectedStates,
+            cities: selectedCities
+        })
+        toast.success('Filtros aplicados com sucesso!')
+    }
+
     const applyFilters = () => {
-        let result = [...auctions]
+        let result = auctions.map((auction) => {
+            const filteredLots = auction.lots?.map((lot) => {
+                let filteredItems = lot.items || []
 
-        if (filters.search) {
-            const searchLower = filters.search.toLowerCase()
-            result = result.filter(auction =>
-                auction.name.toLowerCase().includes(searchLower) ||
-                auction.lots?.some(lot =>
-                    lot.items?.some(item =>
-                        item.title.toLowerCase().includes(searchLower) ||
-                        item.description?.toLowerCase().includes(searchLower)
+                if (filters.search) {
+                    const searchLower = filters.search.toLowerCase()
+                    filteredItems = filteredItems.filter(
+                        (item) =>
+                            item.title.toLowerCase().includes(searchLower) ||
+                            item.description?.toLowerCase().includes(searchLower)
                     )
-                )
-            )
-        }
+                }
 
-        if (filters.auctionType !== 'all') {
-            result = result.filter(auction => auction.type === filters.auctionType)
-        }
+                if (filters.minPrice !== null && filters.minPrice !== 0) {
+                    filteredItems = filteredItems.filter(
+                        (item) => item.basePrice >= filters.minPrice!
+                    )
+                }
+                if (filters.maxPrice !== null && filters.maxPrice !== 0) {
+                    filteredItems = filteredItems.filter(
+                        (item) => item.basePrice <= filters.maxPrice!
+                    )
+                }
 
-        // Filtro por preço
-        if (filters.minPrice !== null) {
-            result = result.filter(auction =>
-                auction.lots?.some(lot =>
-                    lot.items?.some(item => item.basePrice >= filters.minPrice!)
-                )
-            )
-        }
-        if (filters.maxPrice !== null) {
-            result = result.filter(auction =>
-                auction.lots?.some(lot =>
-                    lot.items?.some(item => item.basePrice <= filters.maxPrice!)
-                )
-            )
-        }
+                if (filters.states && filters.states.length > 0) {
+                    filteredItems = filteredItems.filter((item) =>
+                        filters.states!.some((uf) =>
+                            item.state?.toUpperCase().includes(uf.toUpperCase())
+                        )
+                    )
+                }
 
-        // Filtro por localização
-        if (filters.location) {
-            const locationLower = filters.location.toLowerCase()
-            result = result.filter(auction =>
-                auction.location?.toLowerCase().includes(locationLower)
-            )
-        }
+                if (filters.cities && filters.cities.length > 0) {
+                    filteredItems = filteredItems.filter((item) =>
+                        filters.cities!.some((city) =>
+                            item.city?.toLowerCase().includes(city.toLowerCase())
+                        )
+                    )
+                }
 
-        // Filtro por data
-        if (filters.dateRange.start) {
-            result = result.filter(auction =>
-                new Date(auction.openingDate) >= filters.dateRange.start!
-            )
-        }
-        if (filters.dateRange.end) {
-            result = result.filter(auction =>
-                new Date(auction.closingDate) <= filters.dateRange.end!
-            )
-        }
+                return { ...lot, items: filteredItems }
+            }) || []
+
+            return { ...auction, lots: filteredLots }
+        })
+
+        result = result
+            .filter((auction) => {
+                if (filters.auctionType !== 'all' && auction.type !== filters.auctionType) {
+                    return false
+                }
+                if (filters.dateRange.start && new Date(auction.openingDate) < filters.dateRange.start) {
+                    return false
+                }
+                if (filters.dateRange.end && new Date(auction.closingDate) > filters.dateRange.end) {
+                    return false
+                }
+
+                const totalItems =
+                    auction.lots?.reduce((sum, lot) => sum + (lot.items?.length || 0), 0) || 0
+                return totalItems > 0
+            })
+            .map((auction) => ({
+                ...auction,
+                lots: auction.lots?.filter((lot) => (lot.items?.length || 0) > 0)
+            }))
 
         setFilteredAuctions(result)
     }
 
+
+    const getAuctionLocation = (auction: Auction): { city?: string; state?: string } => {
+        for (const lot of auction.lots || []) {
+            for (const item of lot.items || []) {
+                if (item.city || item.state) {
+                    return { city: item.city, state: item.state }
+                }
+            }
+        }
+        return {}
+    }
+
     const handleFilterChange = (key: keyof Filters, value: any) => {
-        setFilters(prev => ({ ...prev, [key]: value }))
+        setPendingFilters((prev) => ({ ...prev, [key]: value }))
     }
 
     const handleDateRangeChange = (key: 'start' | 'end', value: Date | null) => {
-        setFilters(prev => ({
+        setPendingFilters((prev) => ({
             ...prev,
             dateRange: { ...prev.dateRange, [key]: value }
         }))
     }
 
     const resetFilters = () => {
+        setPendingFilters({
+            search: '',
+            auctionType: 'all',
+            minPrice: null,
+            maxPrice: null,
+            location: '',
+            dateRange: { start: null, end: null },
+            states: [],
+            cities: []
+        })
+        setSelectedStates([])
+        setSelectedCities([])
         setFilters({
             search: '',
             auctionType: 'all',
             minPrice: null,
             maxPrice: null,
             location: '',
-            dateRange: {
-                start: null,
-                end: null
-            }
+            dateRange: { start: null, end: null },
+            states: [],
+            cities: []
         })
     }
 
-    const formatPrice = (price: number) => {
-        return new Intl.NumberFormat('pt-BR', {
+    const formatPrice = (price: number) =>
+        new Intl.NumberFormat('pt-BR', {
             style: 'currency',
             currency: 'BRL'
         }).format(price)
-    }
 
-    const formatDate = (date: Date | string) => {
-        return new Intl.DateTimeFormat('pt-BR').format(new Date(date))
-    }
+    const getAuctionItemsCount = (auction: Auction) =>
+        auction.lots?.reduce((total, lot) => total + (lot.items?.length || 0), 0) || 0
 
-    const getAuctionItemsCount = (auction: Auction) => {
-        return auction.lots?.reduce((total, lot) => total + (lot.items?.length || 0), 0) || 0
-    }
+    const AuctionAccordion = ({ auction }: { auction: Auction }) => {
+        const [isOpen, setIsOpen] = useState(false)
+        const location = getAuctionLocation(auction)
+        if (getAuctionItemsCount(auction) === 0) return null
 
-    const getAuctionTotalValue = (auction: Auction) => {
-        return auction.lots?.reduce((total, lot) => {
-            return total + (lot.items?.reduce((lotTotal, item) => lotTotal + item.basePrice, 0) || 0)
-        }, 0) || 0
+        return (
+            <div className="bg-white rounded-lg shadow-sm border transition-shadow">
+                <div
+                    className="p-4 cursor-pointer flex justify-between items-center hover:bg-gray-50"
+                    onClick={() => setIsOpen(!isOpen)}
+                >
+                    <div>
+                        <div className="font-semibold text-gray-900 line-clamp-1">
+                            {auction.name}
+                        </div>
+                    </div>
+                    <div className="text-gray-400">{isOpen ? '▾' : '▸'}</div>
+                </div>
+
+                {isOpen && (
+                    <div className="border-t p-3 space-y-2 bg-gray-50">
+                        {auction.lots?.flatMap((lot) =>
+                            lot.items?.map((item) => (
+                                <div
+                                    key={item.id}
+                                    className="p-2 rounded-md bg-white border hover:shadow-sm cursor-pointer"
+                                    onClick={() => setSelectedAuction(auction)}
+                                >
+                                    <div className="text-sm font-medium text-gray-800">
+                                        {item.title}
+                                    </div>
+                                    <div className="text-xs text-gray-600">
+                                        {item.city && item.state
+                                            ? `${item.city}/${item.state}`
+                                            : 'Localização não informada'}
+                                    </div>
+                                    <div className="text-xs text-gray-500 line-clamp-1">
+                                        {item.description || 'Sem descrição'}
+                                    </div>
+                                    <div className="text-sm text-blue-700 font-semibold mt-1">
+                                        {formatPrice(item.basePrice)}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
+            </div>
+        )
     }
 
     return (
         <MainLayout>
             <Head>
                 <title>Leiloom - Listagem de leilões</title>
-                <meta name="description" content={`Listagem de leilões`} />
+                <meta name="description" content="Listagem de leilões" />
             </Head>
+
             <div className="min-h-screen bg-gray-50">
-                {/* Header */}
                 <div className="bg-white shadow-sm border-b">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
@@ -195,30 +315,13 @@ function AuctionsPage({ user }: Props) {
                                     Explore e participe dos melhores leilões online e presenciais
                                 </p>
                             </div>
-                            <div className="flex items-center mt-4 md:mt-0 space-x-3">
-                                
-                                <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-                                    <button
-                                        onClick={() => setViewMode('grid')}
-                                        className={`p-2 ${viewMode === 'grid' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
-                                    >
-                                        <Grid className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => setViewMode('list')}
-                                        className={`p-2 ${viewMode === 'list' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
-                                    >
-                                        <List className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <div className="flex flex-col lg:flex-row gap-8">
-                        {/* Filtros Sidebar */}
+                        {/* Filtros */}
                         <div className={`lg:w-1/4 ${showFilters ? 'block' : 'hidden lg:block'}`}>
                             <div className="bg-white rounded-lg shadow-sm border p-6 sticky top-24">
                                 <div className="flex items-center justify-between mb-6">
@@ -230,6 +333,7 @@ function AuctionsPage({ user }: Props) {
                                         Limpar tudo
                                     </button>
                                 </div>
+
                                 <div className="space-y-6">
                                     {/* Busca */}
                                     <div>
@@ -241,21 +345,25 @@ function AuctionsPage({ user }: Props) {
                                             <input
                                                 type="text"
                                                 placeholder="Buscar leilões ou itens..."
-                                                value={filters.search}
-                                                onChange={(e) => handleFilterChange('search', e.target.value)}
+                                                value={pendingFilters.search}
+                                                onChange={(e) =>
+                                                    handleFilterChange('search', e.target.value)
+                                                }
                                                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700"
                                             />
                                         </div>
                                     </div>
 
-                                    {/* Tipo de Leilão */}
+                                    {/* Tipo */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Tipo de Leilão
                                         </label>
                                         <select
-                                            value={filters.auctionType}
-                                            onChange={(e) => handleFilterChange('auctionType', e.target.value)}
+                                            value={pendingFilters.auctionType}
+                                            onChange={(e) =>
+                                                handleFilterChange('auctionType', e.target.value)
+                                            }
                                             className="w-full text-gray-700 border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
                                         >
                                             <option value="all">Todos os tipos</option>
@@ -264,238 +372,173 @@ function AuctionsPage({ user }: Props) {
                                         </select>
                                     </div>
 
-                                    {/* Faixa de Preço */}
+                                    {/* Faixa de preço */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Faixa de Preço
                                         </label>
                                         <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <input
-                                                    type="number"
-                                                    placeholder="Mínimo"
-                                                    value={filters.minPrice || ''}
-                                                    onChange={(e) => handleFilterChange('minPrice', e.target.value ? Number(e.target.value) : null)}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
-                                                />
-                                            </div>
-                                            <div>
-                                                <input
-                                                    type="number"
-                                                    placeholder="Máximo"
-                                                    value={filters.maxPrice || ''}
-                                                    onChange={(e) => handleFilterChange('maxPrice', e.target.value ? Number(e.target.value) : null)}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Localização */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Localização
-                                        </label>
-                                        <div className="relative">
-                                            <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                                             <input
-                                                type="text"
-                                                placeholder="Cidade, estado ou endereço"
-                                                value={filters.location}
-                                                onChange={(e) => handleFilterChange('location', e.target.value)}
-                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-700"
+                                                type="number"
+                                                placeholder="Mínimo"
+                                                value={pendingFilters.minPrice || ''}
+                                                onChange={(e) =>
+                                                    handleFilterChange(
+                                                        'minPrice',
+                                                        e.target.value ? Number(e.target.value) : null
+                                                    )
+                                                }
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
+                                            />
+                                            <input
+                                                type="number"
+                                                placeholder="Máximo"
+                                                value={pendingFilters.maxPrice || ''}
+                                                onChange={(e) =>
+                                                    handleFilterChange(
+                                                        'maxPrice',
+                                                        e.target.value ? Number(e.target.value) : null
+                                                    )
+                                                }
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
                                             />
                                         </div>
                                     </div>
 
-                                    {/* Período */}
+                                    {/* Estado */}
+                                    <MultiSelectDropdown
+                                        label="Estados"
+                                        options={states.map((s) => ({
+                                            label: `${s.nome} (${s.sigla})`,
+                                            value: s.sigla
+                                        }))}
+                                        selected={selectedStates}
+                                        onChange={setSelectedStates}
+                                    />
+
+                                    {/* Cidade */}
+                                    {selectedStates.length > 0 && (
+                                        <MultiSelectDropdown
+                                            label="Cidades"
+                                            options={cities.map((c) => ({
+                                                label: c.nome,
+                                                value: c.nome
+                                            }))}
+                                            selected={selectedCities}
+                                            onChange={setSelectedCities}
+                                        />
+                                    )}
+
+                                    {/* Datas */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Período do Leilão
                                         </label>
                                         <div className="space-y-2">
                                             <div>
-                                                <label className="text-xs text-gray-500">Data de início</label>
+                                                <label className="text-xs text-gray-500">
+                                                    Data de início
+                                                </label>
                                                 <input
                                                     type="date"
-                                                    value={filters.dateRange.start ? filters.dateRange.start.toISOString().split('T')[0] : ''}
-                                                    onChange={(e) => handleDateRangeChange('start', e.target.value ? new Date(e.target.value) : null)}
+                                                    value={
+                                                        pendingFilters.dateRange.start
+                                                            ? pendingFilters.dateRange.start
+                                                                .toISOString()
+                                                                .split('T')[0]
+                                                            : ''
+                                                    }
+                                                    onChange={(e) =>
+                                                        handleDateRangeChange(
+                                                            'start',
+                                                            e.target.value ? new Date(e.target.value) : null
+                                                        )
+                                                    }
                                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-xs text-gray-500">Data de término</label>
+                                                <label className="text-xs text-gray-500">
+                                                    Data de término
+                                                </label>
                                                 <input
                                                     type="date"
-                                                    value={filters.dateRange.end ? filters.dateRange.end.toISOString().split('T')[0] : ''}
-                                                    onChange={(e) => handleDateRangeChange('end', e.target.value ? new Date(e.target.value) : null)}
+                                                    value={
+                                                        pendingFilters.dateRange.end
+                                                            ? pendingFilters.dateRange.end
+                                                                .toISOString()
+                                                                .split('T')[0]
+                                                            : ''
+                                                    }
+                                                    onChange={(e) =>
+                                                        handleDateRangeChange(
+                                                            'end',
+                                                            e.target.value ? new Date(e.target.value) : null
+                                                        )
+                                                    }
                                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
                                                 />
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Botão Aplicar */}
+
+
+                                    <div className="pt-4">
+                                        <Button
+                                            variant="primary"
+                                            className="w-full"
+                                            onClick={applyManualFilters}
+                                        >
+                                            Aplicar Filtros
+                                        </Button>
+
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Conteúdo Principal */}
-                        <div className="lg:w-3/4">
-                            {/* Resultados */}
-                            <div>
-                                <div className="flex items-center justify-between mb-6">
-                                    <h2 className="text-lg font-semibold text-gray-900">
-                                        Leilões Disponíveis ({filteredAuctions.length})
-                                    </h2>
-                                    {filteredAuctions.length > 0 && (
-                                        <p className="text-sm text-gray-600">
-                                            Mostrando {Math.min(filteredAuctions.length, viewMode === 'grid' ? 6 : 10)} de {filteredAuctions.length} leilões
-                                        </p>
-                                    )}
-                                </div>
-
-                                {loading ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                        {[...Array(3)].map((_, i) => (
-                                            <div key={i} className="bg-white rounded-lg shadow-sm border p-6 animate-pulse">
-                                                <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-                                                <div className="h-3 bg-gray-200 rounded w-1/2 mb-6"></div>
-                                                <div className="h-20 bg-gray-200 rounded mb-4"></div>
-                                                <div className="h-3 bg-gray-200 rounded w-1/4 mb-2"></div>
-                                                <div className="h-3 bg-gray-200 rounded w-1/3"></div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : filteredAuctions.length === 0 ? (
-                                    <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
-                                        <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                                        <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                            Nenhum leilão encontrado
-                                        </h3>
-                                        <p className="text-gray-600 mb-4">
-                                            Tente ajustar os filtros ou buscar por termos diferentes.
-                                        </p>
-                                        <button
-                                            onClick={resetFilters}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                        >
-                                            Limpar filtros
-                                        </button>
-                                    </div>
-                                ) : viewMode === 'grid' ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                        {filteredAuctions.map((auction) => (
-                                            <div
-                                                key={auction.id}
-                                                className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer"
-                                                onClick={() => setSelectedAuction(auction)}
-                                            >
-                                                <div className="h-40 bg-gray-200 rounded-t-lg flex items-center justify-center">
-                                                    <div className="text-center text-gray-500">
-                                                        <DollarSign className="h-10 w-10 mx-auto mb-2" />
-                                                        <p>Imagem do Leilão</p>
-                                                    </div>
-                                                </div>
-                                                <div className="p-4">
-                                                    <div className="flex items-start justify-between mb-2">
-                                                        <h3 className="font-semibold text-gray-900 line-clamp-1">
-                                                            {auction.name}
-                                                        </h3>
-                                                        <span className={`text-xs px-2 py-1 rounded-full ${auction.type === 'ONLINE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                                                            {auction.type === 'ONLINE' ? 'Online' : 'Presencial'}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                                                        {auction.location || 'Leilão de diversos itens com ótimas oportunidades.'}
-                                                    </p>
-                                                    <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
-                                                        <div className="flex items-center">
-                                                            <Calendar className="h-4 w-4 mr-1" />
-                                                            <span>
-                                                                {formatDate(auction.openingDate)}
-                                                            </span>
-                                                        </div>
-                                                        <span>{getAuctionItemsCount(auction)} itens</span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm font-medium text-gray-900">
-                                                            Valor total: {formatPrice(getAuctionTotalValue(auction))}
-                                                        </span>
-                                                        <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                                                            Ver detalhes
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {filteredAuctions.map((auction) => (
-                                            <div
-                                                key={auction.id}
-                                                className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow p-6 cursor-pointer"
-                                                onClick={() => setSelectedAuction(auction)}
-                                            >
-                                                <div className="flex flex-col md:flex-row md:items-center">
-                                                    <div className="flex-shrink-0 mb-4 md:mb-0 md:mr-6">
-                                                        <div className="h-32 w-32 bg-gray-200 rounded-lg flex items-center justify-center">
-                                                            <DollarSign className="h-8 w-8 text-gray-400" />
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex-grow">
-                                                        <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-3">
-                                                            <h3 className="font-semibold text-gray-900 text-lg">
-                                                                {auction.name}
-                                                            </h3>
-                                                            <span className={`text-xs px-2 py-1 rounded-full ${auction.type === 'ONLINE' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'} mt-2 md:mt-0`}>
-                                                                {auction.type === 'ONLINE' ? 'Online' : 'Presencial'}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-gray-600 mb-4">
-                                                            {auction.location || 'Leilão de diversos itens com ótimas oportunidades.'}
-                                                        </p>
-                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                                            <div className="flex items-center  text-gray-600">
-                                                                <Calendar className="h-4 w-4 mr-2 text-gray-700" />
-                                                                <span>
-                                                                    Início: {formatDate(auction.openingDate)}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center text-gray-600">
-                                                                <Calendar className="h-4 w-4 mr-2 text-gray-700" />
-                                                                <span>
-                                                                    Término: {formatDate(auction.closingDate)}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center text-gray-600">
-                                                                <MapPin className="h-4 w-4 mr-2 text-gray-700" />
-                                                                <span className="truncate">
-                                                                    {auction.location || 'Local não especificado'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="mt-4 md:mt-0 md:ml-6 md:text-right">
-                                                        <div className="mb-2">
-                                                            <span className="text-sm font-medium text-gray-900">
-                                                                {getAuctionItemsCount(auction)} itens
-                                                            </span>
-                                                        </div>
-                                                        <div className="mb-4">
-                                                            <span className="text-sm font-medium text-gray-900">
-                                                                {formatPrice(getAuctionTotalValue(auction))}
-                                                            </span>
-                                                        </div>
-                                                        <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                                                            Ver detalhes
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                        {/* Mapa */}
+                        <div className="lg:w-2/4 w-full order-last lg:order-none">
+                            <div className="bg-white rounded-lg shadow-sm border p-4">
+                                <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                                    Mapa dos Leilões
+                                </h2>
+                                <AuctionMap auctions={filteredAuctions} />
                             </div>
+                        </div>
+
+                        {/* Lista */}
+                        <div className="lg:w-1/4 w-full">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-lg font-semibold text-gray-900">
+                                    Leilões ({filteredAuctions.filter(a => getAuctionItemsCount(a) > 0).length})
+                                </h2>
+                            </div>
+
+                            {loading ? (
+                                <p className="text-center text-gray-500">Carregando...</p>
+                            ) : filteredAuctions.filter(a => getAuctionItemsCount(a) > 0).length === 0 ? (
+                                <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                                    <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                        Nenhum leilão com itens encontrado
+                                    </h3>
+                                    <button
+                                        onClick={resetFilters}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    >
+                                        Limpar filtros
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 max-h-[700px] overflow-y-auto pr-2">
+                                    {filteredAuctions.map((auction) => (
+                                        <AuctionAccordion key={auction.id} auction={auction} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

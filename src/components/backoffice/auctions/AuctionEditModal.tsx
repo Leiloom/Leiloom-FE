@@ -1,7 +1,8 @@
-import React, { Fragment, useState } from 'react'
+import React, { Fragment, useState, useEffect } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { Button } from '@/components/shared/Button'
 import { Input } from '@/components/shared/Input'
+import { Calendar, Clock, X } from 'lucide-react'
 
 interface AuctionEditModalProps {
     isOpen: boolean
@@ -16,21 +17,37 @@ export default function AuctionEditModal({
     onClose,
     onSave,
     auction,
-    isLoading = false
+    isLoading = false,
 }: AuctionEditModalProps) {
     const [formData, setFormData] = useState({
-        name: auction?.name || '',
-        type: auction?.type || 'ONLINE',
-        location: auction?.location || '',
-        url: auction?.url || '',
-        openingDate: auction?.openingDate ? new Date(auction.openingDate).toISOString().slice(0, 16) : '',
-        closingDate: auction?.closingDate ? new Date(auction.closingDate).toISOString().slice(0, 16) : ''
+        name: '',
+        type: 'ONLINE',
+        url: '',
+        openingDate: '',
+        closingDate: '',
     })
 
+    // 🔹 Atualiza o form quando o auction mudar
+    useEffect(() => {
+        if (auction) {
+            setFormData({
+                name: auction.name || '',
+                type: auction.type || 'ONLINE',
+                url: auction.url || '',
+                openingDate: auction.openingDate
+                    ? new Date(auction.openingDate).toISOString().slice(0, 16)
+                    : '',
+                closingDate: auction.closingDate
+                    ? new Date(auction.closingDate).toISOString().slice(0, 16)
+                    : '',
+            })
+        }
+    }, [auction])
+
     const handleInputChange = (field: string, value: string) => {
-        setFormData(prev => ({
+        setFormData((prev) => ({
             ...prev,
-            [field]: value
+            [field]: value,
         }))
     }
 
@@ -40,7 +57,7 @@ export default function AuctionEditModal({
             ...formData,
             openingDate: new Date(formData.openingDate).toISOString(),
             closingDate: new Date(formData.closingDate).toISOString(),
-            updatedBy: 'system'
+            updatedBy: 'system',
         })
     }
 
@@ -75,34 +92,48 @@ export default function AuctionEditModal({
                             leaveTo="opacity-0 scale-95"
                         >
                             <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-lg bg-white text-left align-middle shadow-xl transition-all">
-                                <div className="px-6 py-4 border-b border-gray-200">
-                                    <Dialog.Title
-                                        as="h3"
-                                        className="text-lg font-semibold text-gray-900"
-                                    >
-                                        Editar Leilão
-                                    </Dialog.Title>
+                                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                                    <div className="flex items-center justify-between">
+                                        <Dialog.Title
+                                            as="h3"
+                                            className="text-lg font-semibold text-gray-900"
+                                        >
+                                            Editar Leilão
+                                        </Dialog.Title>
+                                        <button
+                                            onClick={onClose}
+                                            className="text-gray-400 hover:text-gray-500 transition-colors"
+                                            disabled={isLoading}
+                                        >
+                                            <X className="h-5 w-5" />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                                    {/* Informações Básicas */}
+                                    {/* 🧾 Informações Básicas */}
                                     <div className="space-y-4">
-                                        <h4 className="text-md font-medium text-gray-900">Informações Básicas</h4>
+                                        <h4 className="text-md font-medium text-gray-900 pb-2 border-b border-gray-200">
+                                            Informações Básicas
+                                        </h4>
 
+                                        {/* Nome */}
                                         <div>
                                             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                                                 Nome do Leilão *
                                             </label>
                                             <Input
                                                 id="name"
+                                                name="name"
                                                 type="text"
                                                 value={formData.name}
                                                 onChange={(e) => handleInputChange('name', e.target.value)}
                                                 required
                                                 disabled={isLoading}
-                                                placeholder="Nome do leilão" name={''} />
+                                            />
                                         </div>
 
+                                        {/* Tipo */}
                                         <div>
                                             <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
                                                 Tipo do Leilão *
@@ -112,72 +143,67 @@ export default function AuctionEditModal({
                                                 value={formData.type}
                                                 onChange={(e) => handleInputChange('type', e.target.value)}
                                                 required
-                                                className="w-full border border-gray-300 rounded-md shadow-sm text-gray-700 p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
                                                 disabled={isLoading}
+                                                className="w-full border border-gray-300 rounded-md shadow-sm text-gray-700 p-2 focus:ring-yellow-500 focus:border-yellow-500"
                                             >
                                                 <option value="ONLINE">Online</option>
                                                 <option value="LOCAL">Presencial</option>
                                             </select>
                                         </div>
 
-                                        {formData.type === 'LOCAL' ? (
-                                            <div>
-                                                <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Local do Leilão
-                                                </label>
-                                                <Input
-                                                    id="location"
-                                                    type="text"
-                                                    value={formData.location}
-                                                    onChange={(e) => handleInputChange('location', e.target.value)}
-                                                    disabled={isLoading}
-                                                    placeholder="Endereço do local do leilão" name={''} />
-                                            </div>
-                                        ) : (
-                                            <div>
-                                                <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
-                                                    URL do Leilão
-                                                </label>
-                                                <Input
-                                                    id="url"
-                                                    type="url"
-                                                    value={formData.url}
-                                                    onChange={(e) => handleInputChange('url', e.target.value)}
-                                                    disabled={isLoading}
-                                                    placeholder="https://..." name={''} />
-                                            </div>
-                                        )}
+                                        {/* URL */}
+                                        <div>
+                                            <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
+                                                URL
+                                            </label>
+                                            <Input
+                                                id="url"
+                                                name="url"
+                                                type="url"
+                                                value={formData.url}
+                                                onChange={(e) => handleInputChange('url', e.target.value)}
+                                                disabled={isLoading}
+                                                placeholder="https://exemplo.com/leilao"
+                                            />
+                                        </div>
                                     </div>
 
-                                    {/* Datas */}
+                                    {/* 🗓️ Datas */}
                                     <div className="space-y-4">
-                                        <h4 className="text-md font-medium text-gray-900">Período do Leilão</h4>
-
+                                        <h4 className="text-md font-medium text-gray-900 pb-2 border-b border-gray-200">
+                                            <Calendar className="inline h-4 w-4 mr-2" />
+                                            Período do Leilão
+                                        </h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
                                                 <label htmlFor="openingDate" className="block text-sm font-medium text-gray-700 mb-1">
+                                                    <Clock className="inline h-4 w-4 mr-1" />
                                                     Data/Hora de Abertura *
                                                 </label>
                                                 <Input
                                                     id="openingDate"
+                                                    name="openingDate"
                                                     type="datetime-local"
                                                     value={formData.openingDate}
                                                     onChange={(e) => handleInputChange('openingDate', e.target.value)}
                                                     required
-                                                    disabled={isLoading} name={''}                                                />
+                                                    disabled={isLoading}
+                                                />
                                             </div>
-
                                             <div>
                                                 <label htmlFor="closingDate" className="block text-sm font-medium text-gray-700 mb-1">
+                                                    <Clock className="inline h-4 w-4 mr-1" />
                                                     Data/Hora de Encerramento *
                                                 </label>
                                                 <Input
                                                     id="closingDate"
+                                                    name="closingDate"
                                                     type="datetime-local"
                                                     value={formData.closingDate}
                                                     onChange={(e) => handleInputChange('closingDate', e.target.value)}
                                                     required
-                                                    disabled={isLoading} name={''}                                                />
+                                                    disabled={isLoading}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -192,7 +218,6 @@ export default function AuctionEditModal({
                                         >
                                             Cancelar
                                         </Button>
-
                                         <Button
                                             type="submit"
                                             variant="primary"

@@ -3,3 +3,4 @@ declare module 'jwt-decode' {
     export = jwt_decode;
   }
   
+  declare module 'leaflet/dist/leaflet.css'

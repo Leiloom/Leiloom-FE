@@ -11,61 +11,60 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { DataTable } from '@/components/shared/DataTable'
 import { ActionButton } from '@/components/shared/ActionButton'
 import { usePagedData } from '@/hooks/usePagedData'
-import {
-  getAuctions,
-  createAuction,
-} from '@/services/auctionService'
+import { getAuctions, createAuction } from '@/services/auctionService'
 import { SearchBar } from '@/components/shared/SearchBar'
 import { useDynamicTitle } from '@/hooks/useDynamicTitle'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
-
-interface Auction {
-  id?: string
-  name: string
-  type: 'ONLINE' | 'CONVENTIONAL'
-  location?: string
-  url?: string
-  openingDate: string
-  closingDate: string
-  isActive: boolean
-  createdOn?: string
-  updatedOn?: string
-}
+import { Auction, CreateAuctionData, AuctionType } from '@/types/auction'
 
 function AuctionsAdminPage() {
   useDynamicTitle()
   const router = useRouter()
+
   const [auctions, setAuctions] = useState<Auction[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [isOpenModal, setIsOpenModal] = useState(false)
+
+  const [newAuction, setNewAuction] = useState<CreateAuctionData>({
+    name: '',
+    type: AuctionType.ONLINE,
+    url: '',
+    openingDate: '',
+    closingDate: '',
+    createdBy: 'system',
+  })
+
+  // 🔹 Filtro de busca simples
   const filtered = auctions.filter(
     (a) =>
       a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.location?.toLowerCase().includes(search.toLowerCase()) ||
-      a.type.toLowerCase().includes(search.toLowerCase())
+      a.type.toLowerCase().includes(search.toLowerCase()) 
   )
 
   const { currentPage, totalPages, paginatedData, goToPage, resetToFirstPage } =
     usePagedData(filtered, 10)
 
-  const [isOpenModal, setIsOpenModal] = useState(false)
-  const [newAuction, setNewAuction] = useState<Auction>({
-    name: '',
-    type: 'ONLINE',
-    location: '',
-    url: '',
-    openingDate: '',
-    closingDate: '',
-    isActive: true,
-  })
-
-  interface Column<T> {
-    key: keyof T | string
-    header: string
-    render?: (value: any, row: T) => React.ReactNode
+  // 🔹 Carregar leilões
+  async function loadAuctions() {
+    setIsLoading(true)
+    try {
+      const data = await getAuctions()
+      setAuctions(data)
+      resetToFirstPage()
+    } catch {
+      toast.error('Erro ao carregar leilões.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
+  useEffect(() => {
+    loadAuctions()
+  }, [])
+
+  // 🔹 Formatação de datas
   function formatDate(dateString: string) {
     if (!dateString) return '-'
     const date = new Date(dateString)
@@ -76,10 +75,16 @@ function AuctionsAdminPage() {
     })
   }
 
+  // 🔹 Tabela de listagem
+  interface Column<T> {
+    key: keyof T | string
+    header: string
+    render?: (value: any, row: T) => React.ReactNode
+  }
+
   const columns: Column<Auction>[] = [
     { key: 'name', header: 'Nome' },
     { key: 'type', header: 'Tipo' },
-    { key: 'location', header: 'Local' },
     {
       key: 'openingDate',
       header: 'Abertura',
@@ -105,33 +110,15 @@ function AuctionsAdminPage() {
     },
   ]
 
-
-  async function loadAuctions() {
-    setIsLoading(true)
-    try {
-      const data = await getAuctions()
-      setAuctions(data)
-      resetToFirstPage()
-    } catch (err) {
-      toast.error('Erro ao carregar leilões.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadAuctions()
-  }, [])
-
+  // 🔹 Novo leilão
   function handleNewAuction() {
     setNewAuction({
       name: '',
-      type: 'ONLINE',
-      location: '',
+      type: AuctionType.ONLINE,
       url: '',
       openingDate: '',
       closingDate: '',
-      isActive: true,
+      createdBy: 'system',
     })
     setIsOpenModal(true)
   }
@@ -151,6 +138,7 @@ function AuctionsAdminPage() {
     }
   }
 
+  // 🔹 Visualizar detalhes
   function handleView(auction: Auction) {
     router.push(`/backoffice/auctions/${auction.id}`)
   }
@@ -199,7 +187,7 @@ function AuctionsAdminPage() {
           </div>
         </div>
 
-        {/* Modal de Novo Leilão */}
+        {/* 🧾 Modal de Novo Leilão */}
         <Transition appear show={isOpenModal} as={Fragment}>
           <Dialog
             as="div"
@@ -264,38 +252,19 @@ function AuctionsAdminPage() {
                           onChange={(e) =>
                             setNewAuction({
                               ...newAuction,
-                              type: e.target.value as Auction['type'],
+                              type: e.target.value as AuctionType,
                             })
                           }
-                          className="w-full border text-gray-700  border-gray-300 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500"
+                          className="w-full border text-gray-700 border-gray-300 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500"
+                          disabled={isLoading}
                         >
-                          <option value="ONLINE">Online</option>
-                          <option value="CONVENTIONAL">Convencional</option>
+                          <option value={AuctionType.ONLINE}>Online</option>
+                          <option value={AuctionType.LOCAL}>Presencial</option>
                         </select>
                       </div>
-
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Local
-                        </label>
-                        <Input
-                          id="location"
-                          name="location"
-                          type="text"
-                          value={newAuction.location}
-                          onChange={(e) =>
-                            setNewAuction({
-                              ...newAuction,
-                              location: e.target.value,
-                            })
-                          }
-                          disabled={isLoading}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          URL
+                          URL (opcional)
                         </label>
                         <Input
                           id="url"
@@ -303,10 +272,7 @@ function AuctionsAdminPage() {
                           type="text"
                           value={newAuction.url}
                           onChange={(e) =>
-                            setNewAuction({
-                              ...newAuction,
-                              url: e.target.value,
-                            })
+                            setNewAuction({ ...newAuction, url: e.target.value })
                           }
                           disabled={isLoading}
                         />

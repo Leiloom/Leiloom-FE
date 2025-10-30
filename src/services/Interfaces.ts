@@ -53,3 +53,4 @@ export default interface ClientReduced {
   createdOn?: string
   updatedOn?: string
 }
+
