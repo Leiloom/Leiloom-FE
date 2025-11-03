@@ -37,7 +37,6 @@ function AuctionsPage({ user }: Props) {
     const [auctions, setAuctions] = useState<Auction[]>([])
     const [filteredAuctions, setFilteredAuctions] = useState<Auction[]>([])
     const [loading, setLoading] = useState(true)
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
     const [showFilters, setShowFilters] = useState(false)
     const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
 
@@ -248,7 +247,7 @@ function AuctionsPage({ user }: Props) {
         auction.lots?.reduce((total, lot) => total + (lot.items?.length || 0), 0) || 0
 
     const AuctionAccordion = ({ auction }: { auction: Auction }) => {
-        const [isOpen, setIsOpen] = useState(false)
+        const [isOpen, setIsOpen] = useState(true)
         const location = getAuctionLocation(auction)
         if (getAuctionItemsCount(auction) === 0) return null
 
@@ -491,7 +490,7 @@ function AuctionsPage({ user }: Props) {
                                             className="w-full"
                                             onClick={applyManualFilters}
                                         >
-                                            Aplicar Filtros
+                                            Buscar
                                         </Button>
 
                                     </div>
