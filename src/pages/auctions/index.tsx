@@ -13,6 +13,8 @@ import { MapPin, Search, Grid, List } from 'lucide-react'
 import { MultiSelectDropdown } from '@/components/shared/MultiSelectDropdown'
 import { Button } from '@/components/shared/Button'
 import AuctionMap from '@/components/maps/AuctionMap'
+import { getDetailedPaymentSummary } from '@/services/paymentService'
+
 
 interface Props {
     user: TokenPayload
@@ -37,10 +39,8 @@ function AuctionsPage({ user }: Props) {
     const [auctions, setAuctions] = useState<Auction[]>([])
     const [filteredAuctions, setFilteredAuctions] = useState<Auction[]>([])
     const [loading, setLoading] = useState(true)
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
     const [showFilters, setShowFilters] = useState(false)
     const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
-
     const [filters, setFilters] = useState<Filters>({
         search: '',
         auctionType: 'all',
@@ -51,13 +51,16 @@ function AuctionsPage({ user }: Props) {
         states: [],
         cities: []
     })
-
     const [pendingFilters, setPendingFilters] = useState<Filters>({ ...filters })
-
     const [states, setStates] = useState<{ id: number; sigla: string; nome: string }[]>([])
     const [cities, setCities] = useState<{ id: number; nome: string }[]>([])
     const [selectedStates, setSelectedStates] = useState<string[]>([])
     const [selectedCities, setSelectedCities] = useState<string[]>([])
+    const [hasActivePlan, setHasActivePlan] = useState<boolean | null>(null)
+
+    useEffect(() => {
+        validateActivePlan()
+    }, [])
 
     useEffect(() => {
         loadAuctions()
@@ -96,6 +99,30 @@ function AuctionsPage({ user }: Props) {
             setCities(allCities)
         })
     }, [selectedStates])
+
+    async function validateActivePlan() {
+        try {
+            const paymentSummary = await getDetailedPaymentSummary()
+            console.log('Resumo de pagamento:', paymentSummary)
+            if (!paymentSummary) {
+                toast.warning('Você precisa ter um plano ativo para acessar os leilões.')
+                router.push('/no-plan')
+                return
+            }
+            if (!paymentSummary?.currentPlan?.period?.expiresAt || new Date(paymentSummary.currentPlan.period.expiresAt) < new Date()) {
+                toast.warning('Você precisa ter um plano ativo para acessar os leilões.')
+                router.push('/no-plan')
+                return
+            }
+            setHasActivePlan(true)
+            loadAuctions()
+            
+        } catch (error) {
+            console.error('Erro ao verificar plano:', error)
+            toast.error('Erro ao validar o plano do cliente.')
+            router.push('/no-plan')
+        }
+    }
 
     async function loadAuctions() {
         try {
@@ -248,9 +275,20 @@ function AuctionsPage({ user }: Props) {
         auction.lots?.reduce((total, lot) => total + (lot.items?.length || 0), 0) || 0
 
     const AuctionAccordion = ({ auction }: { auction: Auction }) => {
-        const [isOpen, setIsOpen] = useState(false)
+        const [isOpen, setIsOpen] = useState(true)
         const location = getAuctionLocation(auction)
         if (getAuctionItemsCount(auction) === 0) return null
+
+    if (hasActivePlan === null) {
+    return (
+        <MainLayout>
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <p className="text-gray-600">Verificando seu plano...</p>
+            </div>
+        </MainLayout>
+    )
+}
+
 
         return (
             <div className="bg-white rounded-lg shadow-sm border transition-shadow">
@@ -491,7 +529,7 @@ function AuctionsPage({ user }: Props) {
                                             className="w-full"
                                             onClick={applyManualFilters}
                                         >
-                                            Aplicar Filtros
+                                            Buscar
                                         </Button>
 
                                     </div>
@@ -544,7 +582,9 @@ function AuctionsPage({ user }: Props) {
                 </div>
             </div>
         </MainLayout>
+        
     )
+    
 }
 
 export default withClientAuth(AuctionsPage)

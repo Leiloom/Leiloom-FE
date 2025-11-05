@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import { Auction, AuctionItem } from '@/types/auction'
+import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useRouter } from 'next/navigation'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+
+import { Auction, AuctionItem } from '@/types/auction'
+import { enrichItemsWithCoords } from '@/lib/maps/mapHelpers'
+import { clusterIcon } from '@/lib/maps/mapIcons'
 
 interface AuctionMapProps {
   auctions: Auction[]
@@ -16,7 +20,7 @@ type ItemWithCoords = AuctionItem & {
   auctionName?: string
 }
 
-// ⚙️ Hook auxiliar para ajustar o zoom dinamicamente
+// Ajuste automático de bounds
 function FitToBounds({ items }: { items: ItemWithCoords[] }) {
   const map = useMap()
 
@@ -29,10 +33,7 @@ function FitToBounds({ items }: { items: ItemWithCoords[] }) {
 
     if (validCoords.length === 0) return
 
-    const group = L.featureGroup(
-      validCoords.map((c) => L.marker([c!.lat, c!.lng]))
-    )
-
+    const group = L.featureGroup(validCoords.map((c) => L.marker([c!.lat, c!.lng])))
     if (group.getLayers().length > 0) {
       map.fitBounds(group.getBounds().pad(0.2))
     }
@@ -51,14 +52,12 @@ export default function AuctionMapClient({ auctions }: AuctionMapProps) {
   const DEFAULT_LNG = parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LNG || '-51.92528')
   const DEFAULT_ZOOM = parseInt(process.env.NEXT_PUBLIC_DEFAULT_ZOOM || '4', 10)
 
-  // ⚙️ Garantir que estamos no cliente
   useEffect(() => {
     setIsClient(true)
 
-    // Ajusta ícone padrão para evitar bug do marker
     const DefaultIcon = L.icon({
-      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      iconUrl: new URL('/leaflet/marker-icon.png', window.location.origin).href,
+      shadowUrl: new URL('/leaflet/marker-shadow.png', window.location.origin).href,
       iconSize: [25, 41],
       iconAnchor: [12, 41],
       popupAnchor: [1, -34],
@@ -67,29 +66,6 @@ export default function AuctionMapClient({ auctions }: AuctionMapProps) {
 
     L.Marker.prototype.options.icon = DefaultIcon
   }, [])
-
-  // 🔍 Função para obter coordenadas via Nominatim
-  async function geocode(address: string): Promise<{ lat: number; lng: number } | null> {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
-        {
-          headers: {
-            'User-Agent': 'Leiloom-App',
-          },
-        }
-      )
-      const data = await response.json()
-      
-      if (data && data.length > 0) {
-        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
-      }
-      return null
-    } catch (error) {
-      console.error('Erro ao geocodificar:', error)
-      return null
-    }
-  }
 
   useEffect(() => {
     async function processItems() {
@@ -101,74 +77,31 @@ export default function AuctionMapClient({ auctions }: AuctionMapProps) {
 
       setLoading(true)
 
-      // Extrair todos os itens de todos os leilões
       const allItems: ItemWithCoords[] = []
-      
       auctions.forEach((auction) => {
         auction.lots?.forEach((lot) => {
           lot.items?.forEach((item) => {
-            allItems.push({
-              ...item,
-              auctionName: auction.name
-            })
+            allItems.push({ ...item, auctionName: auction.name })
           })
         })
       })
 
-      // Geocodificar apenas itens que têm localização mas não têm coordenadas
-      const results = await Promise.all(
-        allItems.map(async (item) => {
-          // Se já tem coordenadas lat/lng no banco, usa elas
-          if (item.lat && item.lng) {
-            return {
-              ...item,
-              coords: { lat: item.lat, lng: item.lng }
-            }
-          }
-
-          // Senão, tenta geocodificar com cidade e estado
-          if (item.city && item.state) {
-            const address = `${item.city}, ${item.state}, Brasil`
-            const coords = await geocode(address)
-            return { ...item, coords }
-          }
-
-          return { ...item, coords: null }
-        })
-      )
-
-      setGeoItems(results.filter(item => item.coords !== null))
+      const enriched = await enrichItemsWithCoords(allItems)
+      setGeoItems(enriched as ItemWithCoords[])
       setLoading(false)
     }
 
-    if (isClient) {
-      processItems()
-    }
+    if (isClient) processItems()
   }, [auctions, isClient])
 
-  if (!isClient) {
-    return (
-      <div className="flex items-center justify-center h-[500px] bg-gray-100 rounded-lg text-gray-500">
-        Inicializando mapa...
-      </div>
-    )
-  }
+  if (!isClient)
+    return <div className="flex items-center justify-center h-[500px] bg-gray-100">Inicializando mapa...</div>
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[500px] bg-gray-100 rounded-lg text-gray-500">
-        Carregando localizações...
-      </div>
-    )
-  }
+  if (loading)
+    return <div className="flex items-center justify-center h-[500px] bg-gray-100">Carregando localizações...</div>
 
-  if (geoItems.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-[500px] bg-gray-100 rounded-lg text-gray-500">
-        Nenhum item com localização encontrado
-      </div>
-    )
-  }
+  if (geoItems.length === 0)
+    return <div className="flex items-center justify-center h-[500px] bg-gray-100">Nenhum item com localização</div>
 
   return (
     <div className="w-full h-[500px] bg-gray-100 rounded-lg overflow-hidden shadow-sm">
@@ -179,38 +112,101 @@ export default function AuctionMapClient({ auctions }: AuctionMapProps) {
         scrollWheelZoom
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contribuidores'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
         <FitToBounds items={geoItems} />
 
-        {geoItems.map((item) => (
-          <Marker key={item.id} position={[item.coords!.lat, item.coords!.lng]}>
-            <Popup>
-              <div className="text-sm min-w-[200px]">
-                <p className="font-semibold text-gray-900 mb-1">{item.title}</p>
-                <p className="text-xs text-gray-500 mb-2">{item.auctionName}</p>
-                <p className="text-gray-700 text-xs mb-2">
-                  {item.location && `${item.location}, `}
-                  {item.city}/{item.state}
-                </p>
-                <p className="text-sm font-semibold text-green-700 mb-2">
-                  {new Intl.NumberFormat('pt-BR', {
+        <MarkerClusterGroup
+          chunkedLoading
+          spiderfyOnMaxZoom
+          showCoverageOnHover={false}
+          maxClusterRadius={60}
+          iconCreateFunction={(cluster: any) => {
+            const markers = cluster.getAllChildMarkers()
+            const values = markers
+              .map((m: any) => m.options?.itemData?.basePrice ?? 0)
+              .filter((v: number) => typeof v === 'number' && v > 0)
+
+            const min = values.length > 0 ? Math.min(...values) : 0
+            const max = values.length > 0 ? Math.max(...values) : 0
+            const count = cluster.getChildCount()
+
+            let size = 'small'
+            if (count > 20) size = 'large'
+            else if (count > 10) size = 'medium'
+
+            const formatter = new Intl.NumberFormat('pt-BR', {
+              style: 'currency',
+              currency: 'BRL',
+              maximumFractionDigits: 0,
+            })
+
+            const minStr = min > 0 ? formatter.format(min) : '-'
+            const maxStr = max > 0 ? formatter.format(max) : '-'
+
+            return L.divIcon({
+              html: `
+      <div class="cluster-marker ${size}">
+        <div class="count">${count}</div>
+        <div class="range">
+          <div>De ${minStr}</div>
+          <div>Até ${maxStr}</div>
+        </div>
+      </div>
+    `,
+              className: 'custom-cluster-icon',
+              iconSize: L.point(55, 55, true),
+            })
+          }}
+
+
+        >
+          {geoItems.map((item) => (
+            <Marker
+              key={item.id}
+              position={[item.coords!.lat, item.coords!.lng]}
+              ref={(marker) => {
+                if (marker) {
+                  (marker as any).options.itemData = item
+
+                  // ✅ Tooltip (hover) com o valor formatado
+                  const price = new Intl.NumberFormat('pt-BR', {
                     style: 'currency',
-                    currency: 'BRL'
-                  }).format(item.basePrice)}
-                </p>
-                <button
-                  onClick={() => router.push(`/auctions/${item.auctionId}`)}
-                  className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                >
-                  Ver leilão →
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+                    currency: 'BRL',
+                  }).format(item.basePrice)
+
+                  marker.bindTooltip(
+                    `<div class="item-tooltip">${price}</div>`,
+                    { permanent: false, direction: 'bottom', opacity: 1, className: 'item-tooltip' }
+                  )
+                }
+              }}
+            >
+              <Popup>
+                <div className="text-sm min-w-[200px]">
+                  <p className="font-semibold text-gray-900 mb-1">{item.title}</p>
+                  <p className="text-xs text-gray-500 mb-2">{item.auctionName}</p>
+                  <p className="text-gray-700 text-xs mb-2">
+                    {item.location && `${item.location}, `}
+                    {item.city}/{item.state}
+                  </p>
+                  <p className="text-sm font-semibold text-green-700 mb-2">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.basePrice)}
+                  </p>
+                  <button
+                    onClick={() => router.push(`/auctions/${item.auctionId}`)}
+                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                  >
+                    Ver leilão →
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
+        </MarkerClusterGroup>
       </MapContainer>
     </div>
   )

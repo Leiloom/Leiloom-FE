@@ -20,3 +20,85 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.custom-cluster-icon {
+  background: transparent;
+  border: none;
+}
+
+.cluster-marker {
+  position: relative;
+  background: #5e6169;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  border: 3px solid white;
+  width: 50px;
+  height: 50px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+
+.cluster-marker:hover {
+  transform: scale(1.1);
+  background: #878891;
+}
+
+.cluster-marker.medium {
+  width: 50px;
+  height: 50px;
+  background: #878891;
+}
+
+.cluster-marker.large {
+  width: 70px;
+  height: 70px;
+  background: #878891;
+}
+
+.cluster-marker .count {
+  font-size: 14px;
+  font-weight: 700;
+  z-index: 2;
+}
+
+/* 🔥 aparece só no hover */
+.cluster-marker .range {
+  position: absolute;
+  bottom: -55px;
+  background: #2d2f34;
+  color: #fff;
+  font-size: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  white-space: nowrap;
+}
+
+.cluster-marker:hover .range {
+  opacity: 1;
+}
+
+.cluster-marker .range div {
+  line-height: 1.3;
+}
+
+.leaflet-tooltip {
+  background-color: #2d2f34 !important;        /* fundo preto */
+  color: #fff !important;                    /* texto branco */
+  border: none !important;              /* sem borda */
+  padding: 6px 10px !important;
+  border-radius: 6px !important;
+  font-weight: 600;
+  font-size: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  transform: translateY(6px);    /* 👈 empurra o tooltip um pouco pra baixo */
+}
