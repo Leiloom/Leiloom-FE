@@ -38,7 +38,6 @@ export async function getAuctions() {
  */
 export async function getAuctionById(id: string) {
   try {
-    console.log('ID do leilão:', id)
     const response = await api.get(`/auctions/${id}`)
     return response.data as Auction
   } catch (error) {

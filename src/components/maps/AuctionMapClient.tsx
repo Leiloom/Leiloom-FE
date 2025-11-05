@@ -55,15 +55,15 @@ export default function AuctionMapClient({ auctions }: AuctionMapProps) {
   useEffect(() => {
     setIsClient(true)
 
-    // Corrige ícone padrão do Leaflet
     const DefaultIcon = L.icon({
-      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      iconUrl: new URL('/leaflet/marker-icon.png', window.location.origin).href,
+      shadowUrl: new URL('/leaflet/marker-shadow.png', window.location.origin).href,
       iconSize: [25, 41],
       iconAnchor: [12, 41],
       popupAnchor: [1, -34],
       shadowAnchor: [12, 41],
     })
+
     L.Marker.prototype.options.icon = DefaultIcon
   }, [])
 
@@ -124,30 +124,30 @@ export default function AuctionMapClient({ auctions }: AuctionMapProps) {
           showCoverageOnHover={false}
           maxClusterRadius={60}
           iconCreateFunction={(cluster: any) => {
-  const markers = cluster.getAllChildMarkers()
-  const values = markers
-    .map((m: any) => m.options?.itemData?.basePrice ?? 0)
-    .filter((v: number) => typeof v === 'number' && v > 0)
+            const markers = cluster.getAllChildMarkers()
+            const values = markers
+              .map((m: any) => m.options?.itemData?.basePrice ?? 0)
+              .filter((v: number) => typeof v === 'number' && v > 0)
 
-  const min = values.length > 0 ? Math.min(...values) : 0
-  const max = values.length > 0 ? Math.max(...values) : 0
-  const count = cluster.getChildCount()
+            const min = values.length > 0 ? Math.min(...values) : 0
+            const max = values.length > 0 ? Math.max(...values) : 0
+            const count = cluster.getChildCount()
 
-  let size = 'small'
-  if (count > 20) size = 'large'
-  else if (count > 10) size = 'medium'
+            let size = 'small'
+            if (count > 20) size = 'large'
+            else if (count > 10) size = 'medium'
 
-  const formatter = new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    maximumFractionDigits: 0,
-  })
+            const formatter = new Intl.NumberFormat('pt-BR', {
+              style: 'currency',
+              currency: 'BRL',
+              maximumFractionDigits: 0,
+            })
 
-  const minStr = min > 0 ? formatter.format(min) : '-'
-  const maxStr = max > 0 ? formatter.format(max) : '-'
+            const minStr = min > 0 ? formatter.format(min) : '-'
+            const maxStr = max > 0 ? formatter.format(max) : '-'
 
-  return L.divIcon({
-    html: `
+            return L.divIcon({
+              html: `
       <div class="cluster-marker ${size}">
         <div class="count">${count}</div>
         <div class="range">
@@ -156,22 +156,34 @@ export default function AuctionMapClient({ auctions }: AuctionMapProps) {
         </div>
       </div>
     `,
-    className: 'custom-cluster-icon',
-    iconSize: L.point(55, 55, true),
-  })
-}}
+              className: 'custom-cluster-icon',
+              iconSize: L.point(55, 55, true),
+            })
+          }}
 
 
         >
           {geoItems.map((item) => (
             <Marker
-  key={item.id}
-  position={[item.coords!.lat, item.coords!.lng]}
-  ref={(marker) => {
-    if (marker) (marker as any).options.itemData = item
-  }}
->
+              key={item.id}
+              position={[item.coords!.lat, item.coords!.lng]}
+              ref={(marker) => {
+                if (marker) {
+                  (marker as any).options.itemData = item
 
+                  // ✅ Tooltip (hover) com o valor formatado
+                  const price = new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                  }).format(item.basePrice)
+
+                  marker.bindTooltip(
+                    `<div class="item-tooltip">${price}</div>`,
+                    { permanent: false, direction: 'bottom', opacity: 1, className: 'item-tooltip' }
+                  )
+                }
+              }}
+            >
               <Popup>
                 <div className="text-sm min-w-[200px]">
                   <p className="font-semibold text-gray-900 mb-1">{item.title}</p>
@@ -193,6 +205,7 @@ export default function AuctionMapClient({ auctions }: AuctionMapProps) {
               </Popup>
             </Marker>
           ))}
+
         </MarkerClusterGroup>
       </MapContainer>
     </div>

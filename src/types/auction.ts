@@ -18,10 +18,14 @@ export enum ItemStatus {
 export interface PropertyAuction {
   id: string
   auctionItemId: string
-  type: string 
+  type: string
   bedrooms?: number
   parkingSpots?: number
-  area?: number 
+  area?: number
+}
+export interface AuctionImage {
+  id: string
+  url: string
 }
 
 export interface AuctionItem {
@@ -37,15 +41,14 @@ export interface AuctionItem {
   createdOn: string
   updatedOn: string
 
-  // 🆕 Campos geográficos
   state?: string
   city?: string
   location?: string
   zipCode?: string
   lat?: number
   lng?: number
+  images?: string[] | AuctionImage[]
 
-  // Relacionamentos
   auction?: Auction
   lot?: Lot
   propertyDetails?: PropertyAuction
@@ -57,8 +60,8 @@ export interface Lot {
   identification: string
   createdOn: string
   updatedOn: string
-  
-  // Relacionamentos
+
+
   auction?: Auction
   items?: AuctionItem[]
 }
@@ -75,12 +78,11 @@ export interface Auction {
   createdOn: string
   updatedBy?: string
   updatedOn?: string
-  
+
   lots?: Lot[]
   items?: AuctionItem[]
 }
 
-// ✅ DTOs
 
 export interface CreateAuctionData {
   name: string
@@ -113,7 +115,6 @@ export interface CreateAuctionItemData {
   increment: number | string
   status?: ItemStatus
 
-  // 🆕 Endereço e coordenadas
   state?: string
   city?: string
   location?: string
@@ -122,16 +123,19 @@ export interface CreateAuctionItemData {
   lng?: number
 
   propertyDetails?: PropertyDetailsData
+
+  images?: string[]
 }
 
-// DTOs de atualização
+
 export interface UpdateAuctionData extends Partial<CreateAuctionData> {
   updatedBy?: string
   isActive?: boolean
   type?: AuctionType
 }
 
-
 export interface UpdateLotData extends Partial<CreateLotData> {}
 
-export interface UpdateAuctionItemData extends Partial<CreateAuctionItemData> {}
+export interface UpdateAuctionItemData extends Partial<CreateAuctionItemData> {
+  images?: string[]
+}

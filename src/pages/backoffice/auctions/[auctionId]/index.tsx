@@ -189,21 +189,50 @@ function AuctionDetailPage() {
         getAuctionById(auctionId),
         getLotsByAuction(auctionId)
       ])
+      const normalizeImages = (items?: any[]) =>
+        (items || []).map(item => ({
+          ...item,
+          images: (item.images || []).map((img: any) =>
+            typeof img === 'string'
+              ? { id: crypto.randomUUID?.() ?? Math.random().toString(), url: img }
+              : { id: img.id ?? crypto.randomUUID?.() ?? Math.random().toString(), url: img.url }
+          ),
+        }))
 
-      setAuction(auctionData)
-      setLots(lotsData)
+      // ✅ Normaliza os lotes
+      const normalizedLots = (lotsData || []).map((lot: any) => ({
+        ...lot,
+        items: normalizeImages(lot.items),
+      }))
+
+      // ✅ Normaliza o próprio leilão
+      const normalizedAuction = {
+        ...auctionData,
+        lots: (auctionData.lots || []).map((lot: any) => ({
+          ...lot,
+          items: normalizeImages(lot.items),
+        })),
+        items: normalizeImages(auctionData.items),
+      }
+
+      console.log('🎯 Normalized Auction:', normalizedAuction)
+      console.log('🎯 Normalized Lots:', normalizedLots)
+
+      setAuction(normalizedAuction)
+      setLots(normalizedLots)
 
       // Expandir todos os lotes por padrão
-      const lotIds = lotsData.map((lot: Lot) => lot.id)
+      const lotIds = normalizedLots.map((lot: Lot) => lot.id)
       setExpandedLots(new Set(lotIds))
-
     } catch (error) {
       toast.error('Erro ao carregar detalhes do leilão')
       console.error('Erro ao carregar dados:', error)
     } finally {
       setIsLoading(false)
     }
+
   }, [auctionId])
+
 
   useEffect(() => {
     fetchData()
@@ -369,10 +398,25 @@ function AuctionDetailPage() {
 
   const handleEditItem = (item: AuctionItem) => {
     setSelectedLotId(item.lotId)
-    setEditingItem(item)
+
+    console.log('🧩 Item antes de setar modal:', item)
+
+    // 🧠 Garante que images tenha objetos { id, url } e não strings
+    const normalizedImages = (item.images || []).map((img: any) =>
+      typeof img === 'string' ? { id: crypto.randomUUID?.() ?? Math.random().toString(), url: img } : img
+    )
+
+    setEditingItem({
+      ...item,
+      images: normalizedImages
+    })
+
+    console.log('✅ Item após normalizar imagens:', normalizedImages)
+
     setItemAction('edit')
     setIsItemModalOpen(true)
   }
+
 
   const handleSaveItem = async (formData: FormData) => {
     setIsLoading(true)
@@ -390,6 +434,15 @@ function AuctionDetailPage() {
         location: formData.get('location') as string,
         status: formData.get('status') as string || 'AVAILABLE'
       }
+
+      const images = formData.getAll('images')
+        .map((v) => (v as string).trim())
+        .filter((v) => v.length > 0)
+
+      if (images.length > 0) {
+        itemData.images = images
+      }
+
 
 
       if (itemData.type === 'IMOVEL') {
@@ -1273,6 +1326,60 @@ function AuctionDetailPage() {
                       </select>
                     </div>
                   )}
+
+                  {/* 🖼️ Links de Imagens */}
+                  <div className="space-y-4">
+                    <h3 className="text-md font-medium text-gray-900 flex items-center">
+                      <Package className="h-5 w-5 mr-2" />
+                      Links das Imagens
+                    </h3>
+
+                    <p className="text-sm text-gray-500">
+                      Adicione um ou mais links diretos (URLs) para imagens do item.
+                      Exemplo: https://meusite.com/imagem1.jpg
+                    </p>
+
+                    <div id="image-links-container" className="space-y-2">
+                      {(editingItem?.images || []).map((img, index) => (
+                        <Input
+                          id={`image-link-${index}`}
+                          key={index}
+                          type="text"
+                          name="images"
+                          defaultValue={typeof img === 'string' ? img : img.url}
+                          placeholder="https://exemplo.com/imagem.jpg"
+                          disabled={isLoading}
+                        />
+                      ))}
+
+                      {/* Campo vazio extra para novo link */}
+                      <Input
+                        type="text"
+                        name="images"
+                        placeholder="https://exemplo.com/imagem.jpg"
+                        id='d'
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="add2"
+                      onClick={() => {
+                        const container = document.getElementById('image-links-container')
+                        if (!container) return
+                        const input = document.createElement('input')
+                        input.type = 'text'
+                        input.name = 'images'
+                        input.placeholder = 'https://exemplo.com/imagem.jpg'
+                        input.className =
+                          'w-full border border-gray-300 rounded-md p-2 text-gray-700 focus:ring-yellow-500 focus:border-yellow-500'
+                        container.appendChild(input)
+                      }}
+                    >
+                      Adicionar outro link
+                    </Button>
+                  </div>
 
                   <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
                     <Button

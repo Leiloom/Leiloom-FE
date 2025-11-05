@@ -76,8 +76,9 @@ function AuctionDetailPage({ user }: Props) {
   const [loading, setLoading] = useState(true)
   const [expandedLots, setExpandedLots] = useState<{ [key: string]: boolean }>({})
   const [selectedItem, setSelectedItem] = useState<AuctionItem | null>(null)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
-  // 🧭 Carregar dados do leilão
+
   useEffect(() => {
     if (auctionId) loadAuctionDetail()
   }, [auctionId])
@@ -88,17 +89,16 @@ function AuctionDetailPage({ user }: Props) {
       const auctionData = await getAuctionById(auctionId)
       if (!auctionData) throw new Error('Leilão não encontrado')
 
-      // Expande todos os lotes por padrão
       const expanded: { [key: string]: boolean } = {}
       auctionData.lots?.forEach((lot: any) => (expanded[lot.id] = true))
 
-setAuction({
-  ...auctionData,
-  lots: (auctionData.lots ?? []).map((lot: any) => ({
-    ...lot,
-    items: lot.items ?? []
-  }))
-})
+      setAuction({
+        ...auctionData,
+        lots: (auctionData.lots ?? []).map((lot: any) => ({
+          ...lot,
+          items: lot.items ?? []
+        }))
+      })
 
 
       setExpandedLots(expanded)
@@ -267,11 +267,10 @@ setAuction({
                         {lot.items.map(item => (
                           <div
                             key={item.id}
-                            className={`flex items-center gap-3 p-3 hover:bg-gray-50 transition cursor-pointer border-l-4 ${
-                              selectedItem?.id === item.id
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-transparent'
-                            }`}
+                            className={`flex items-center gap-3 p-3 hover:bg-gray-50 transition cursor-pointer border-l-4 ${selectedItem?.id === item.id
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-transparent'
+                              }`}
                             onClick={() => setSelectedItem(item)}
                           >
                             <div className="flex items-center gap-2">
@@ -342,11 +341,11 @@ setAuction({
                       </div>
                     </div>
                   ) : (
-<AuctionDetailMap
-  items={getItemsWithValidAddress()}
-  selectedItem={selectedItem}
-  onItemSelect={setSelectedItem}
-/>
+                    <AuctionDetailMap
+                      items={getItemsWithValidAddress()}
+                      selectedItem={selectedItem}
+                      onItemSelect={setSelectedItem}
+                    />
 
                   )}
                 </div>
@@ -404,11 +403,32 @@ setAuction({
                         {(selectedItem.location ||
                           selectedItem.city ||
                           selectedItem.state) && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            📍{' '}
-                            {selectedItem.location && `${selectedItem.location}, `}
-                            {selectedItem.city}/{selectedItem.state}
-                          </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              📍{' '}
+                              {selectedItem.location && `${selectedItem.location}, `}
+                              {selectedItem.city}/{selectedItem.state}
+                            </p>
+                          )}
+
+                        {selectedItem.images && selectedItem.images.length > 0 && (
+                          <div className="mt-4">
+                            <h6 className="text-sm font-medium text-gray-700 mb-2">Imagens do item</h6>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                              {selectedItem.images.map((img, index) => (
+                                <div
+                                  key={index}
+                                  className="relative group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm cursor-pointer"
+                                  onClick={() => setSelectedImage(typeof img === 'string' ? img : img.url)}
+                                >
+                                  <img
+                                    src={typeof img === 'string' ? img : img.url}
+                                    alt={`Imagem ${index + 1}`}
+                                    className="w-full h-32 object-cover transition-transform duration-200 group-hover:scale-105"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -419,11 +439,32 @@ setAuction({
           </div>
         </div>
       </div>
+      {selectedImage && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[10000]"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] p-4">
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-2 right-2 text-white text-2xl font-bold hover:text-gray-300"
+            >
+              ×
+            </button>
+            <img
+              src={selectedImage}
+              alt="Imagem ampliada"
+              className="rounded-lg shadow-2xl max-h-[85vh] w-auto mx-auto object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+
     </MainLayout>
   )
 }
 
-// 🔹 Componente auxiliar para cards de estatística
 const StatCard = ({
   color,
   label,
