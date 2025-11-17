@@ -9,12 +9,34 @@ import { acceptTerms, getCurrentTerms } from '@/services/termsService'
 import { toast } from 'react-toastify'
 import InfoTooltip from '@/components/shared/InfoToolTip'
 import PasswordField from '@/components/shared/PasswordField'
+import ConfirmPassWordField from '@/components/shared/ConfirmPasswordField'
 import { updateClientUser, updateClient } from '@/services/clientService'
 import { loginClient } from '@/services/authService'
 import { useAuthContext } from '@/contexts/AuthContext'
+import CPF from '../../validations/cpf';
+import CNPJ from '../../validations/cnpj';
+import CNPJAlfanumerico from '../../validations/cnpjAlfanumerico';
 
 const schema = z.object({
-  cpfCnpj: z.string().min(11, 'CPF ou CNPJ obrigatório'),
+  cpfCnpj: z.string()
+    .min(11, 'CPF ou CNPJ obrigatório')
+    .refine((value) => {
+      const cleanedValue = value.replace(/[./-]/g , '').replace(/[^\dA-Z]/gi, '');
+        
+      if (cleanedValue.length === 11 && /^\d+$/.test(cleanedValue)) {
+        return CPF.isValid(value);
+      }
+      
+      if (cleanedValue.length === 14) {
+        if (/^\d+$/.test(cleanedValue)) {
+          return CNPJ.isValid(value);
+        }
+        // CNPJ alfanumérico
+        return CNPJAlfanumerico.isValid(value);
+      }
+      
+      return false;
+    }, { message: 'CPF ou CNPJ inválido' }),
   phone: z.string().min(10, 'Telefone obrigatório'),
   password: z.string()
     .min(6, 'Senha precisa ter pelo menos 6 caracteres')
@@ -22,7 +44,7 @@ const schema = z.object({
     .regex(/[a-z]/, 'Deve conter ao menos uma letra minúscula')
     .regex(/[0-9]/, 'Deve conter ao menos um número')
     .regex(/[^A-Za-z0-9]/, 'Deve conter ao menos um caractere especial'),
-  confirmPassword: z.string().min(6, 'Confirme a senha'),
+  confirmPassword: z.string(),
   acceptTerms: z.literal(true, {
     errorMap: () => ({ message: 'É necessário aceitar os Termos de Uso' }),
   }),
@@ -68,10 +90,10 @@ async function onSubmit(data: FormData) {
 
     login(token, 'CLIENT')
     
-    await acceptTerms({
-      clientUserId: formData.clientUserId,
-      termsId: currentTerms?.id || '',
-    })
+    // await acceptTerms({
+    //   clientUserId: formData.clientUserId,
+    //   termsId: currentTerms?.id || '',
+    // })
 
     await updateClientUser(
       formData.clientUserId,
@@ -103,20 +125,20 @@ async function onSubmit(data: FormData) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div>
-        <label className="block mb-1 text-sm text-black">CPF ou CNPJ</label>
-        <input {...register('cpfCnpj')} className="w-full border px-3 py-2 rounded text-black" />
+        <label className="block mb-1 text-sm text-black ">CPF ou CNPJ <span className="text-red-500">*</span></label>
+        <input {...register('cpfCnpj')} className="w-full border border-gray-300 rounded px-3 py-2 text-black" />
         {errors.cpfCnpj && <p className="text-red-500 text-xs">{errors.cpfCnpj.message}</p>}
       </div>
 
       <div>
-        <label className="block mb-1 text-sm text-black">Telefone</label>
-        <input {...register('phone')} className="w-full border px-3 py-2 rounded text-black" />
+        <label className="block mb-1 text-sm text-black">Telefone <span className="text-red-500">*</span></label>
+        <input {...register('phone')} className="w-full border border-gray-300 rounded px-3 py-2 text-black" />
         {errors.phone && <p className="text-red-500 text-xs">{errors.phone.message}</p>}
       </div>
       <hr className="border-t border-gray-300 my-4" />
       <div>
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 block mb-1 text-black">
-          Senha
+        <label className="flex items-center gap-2 text-sm font-mediu mb-1 text-black">
+          Senha <span className="text-red-500">*</span>
           <InfoTooltip
             text={
               <div className="text-xs space-y-1">
@@ -132,13 +154,13 @@ async function onSubmit(data: FormData) {
             }
           />
         </label>
-        <PasswordField register={register('password')} error={errors.password} />
+        <PasswordField register={register('password')} />
         {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
       </div>
 
       <div>
-        <label className="block mb-1 text-sm text-black">Confirme a Senha</label>
-        <PasswordField register={register('confirmPassword')} error={errors.confirmPassword} />
+        <label className="block mb-1 text-sm text-black">Confirme a Senha <span className="text-red-500">*</span></label>
+        <ConfirmPassWordField register={register('confirmPassword')} />
         {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword.message}</p>}
       </div>
 
