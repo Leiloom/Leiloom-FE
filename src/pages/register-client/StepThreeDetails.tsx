@@ -1,6 +1,6 @@
 'use client'
 
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -37,7 +37,8 @@ const schema = z.object({
       
       return false;
     }, { message: 'CPF ou CNPJ inválido' }),
-  phone: z.string().min(10, 'Telefone obrigatório'),
+  phone: z.string().min(10, 'Telefone precisa ter no mínimo 10 dígitos')
+    .regex(/^\(?\d{2}\)?[\s-]?[\s9]?\d{4}-?\d{4}$/, 'Telefone no formato inválido'),
   password: z.string()
     .min(6, 'Senha precisa ter pelo menos 6 caracteres')
     .regex(/[A-Z]/, 'Deve conter ao menos uma letra maiúscula')
@@ -61,11 +62,36 @@ export default function StepThreeDetails({ onNext }: { onNext: () => void }) {
   const { login } = useAuthContext()
   const { formData, setFormData } = useRegisterClient()
   if (!formData?.clientUserId) return null;
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  // helper to progressively format phone to (XX) XXXX-XXXX or (XX) 9XXXX-XXXX
+  const formatPhone = (value = '') => {
+    const digits = value.replace(/\D/g, '')
+    if (!digits) return ''
+
+    // keep only up to 11 digits (2 area + up to 9 number)
+    const cleaned = digits.slice(0, 11)
+
+    // area code
+    const area = cleaned.slice(0, 2)
+    const rest = cleaned.slice(2)
+
+    if (!rest) return `(${area}`
+
+    // if rest is <= 4 digits show simple block
+    if (rest.length <= 4) return `(${area}) ${rest}`
+
+    // if rest has more than 4 digits, split last 4
+    const first = rest.slice(0, rest.length - 4)
+    const last = rest.slice(-4)
+
+    return `(${area}) ${first}-${last}`
+  }
+
+  const { register, control, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       cpfCnpj: formData.cpfCnpj,
-      phone: formData.phone,
+      // store default phone already formatted to the expected mask
+      phone: formData.phone ? formatPhone(formData.phone) : '',
       password: formData.password
     }
   })
@@ -132,7 +158,23 @@ async function onSubmit(data: FormData) {
 
       <div>
         <label className="block mb-1 text-sm text-black">Telefone <span className="text-red-500">*</span></label>
-        <input {...register('phone')} className="w-full border border-gray-300 rounded px-3 py-2 text-black" />
+        {/* Use Controller so we can format the phone as the user types */}
+        <Controller
+          control={control}
+          name="phone"
+          render={({ field }) => (
+            <input
+              {...field}
+              onChange={(e) => {
+                  // apply formatting while the user types (keeps optional leading 9)
+                  const formatted = formatPhone(e.target.value)
+                  field.onChange(formatted)
+                }}
+              value={field.value ?? ''}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-black"
+            />
+          )}
+        />
         {errors.phone && <p className="text-red-500 text-xs">{errors.phone.message}</p>}
       </div>
       <hr className="border-t border-gray-300 my-4" />
