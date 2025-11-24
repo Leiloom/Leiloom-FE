@@ -1,7 +1,7 @@
   'use client'
 import Head from 'next/head'
 import { useEffect, useState, Fragment } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'react-toastify'
 import { Dialog, Transition } from '@headlessui/react'
 import MainLayout from '@/layouts/MainLayout'
@@ -27,10 +27,26 @@ import { Button } from '@/components/shared/Button'
   function ClientsAdminPage() {
     useDynamicTitle()
     const router = useRouter()
+    // read query params so the page can be pre-filtered (e.g. ?status=pending)
+    const searchParams = useSearchParams()
     const [clients, setClients] = useState<Client[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [search, setSearch] = useState('')
-    const [selectedStatuses, setSelectedStatuses] = useState<Client['status'][]>(['PENDING', 'CONFIRMED', 'APPROVED'])
+    // default to all statuses selected
+    const [selectedStatuses, setSelectedStatuses] = useState<Client['status'][]>(['PENDING', 'CONFIRMED', 'APPROVED', 'EXCLUDED'])
+
+    // when the URL contains ?status=pending (or multiple statuses comma-separated)
+    useEffect(() => {
+      const raw = searchParams?.get('status')
+      if (!raw) return
+
+      const parts = raw.split(',').map(p => p.trim().toUpperCase())
+      const valid = parts.filter(p => ['PENDING', 'CONFIRMED', 'APPROVED', 'EXCLUDED'].includes(p)) as Client['status'][]
+
+      if (valid.length > 0) {
+        setSelectedStatuses(valid)
+      }
+    }, [String(searchParams)])
     const filtered = clients
       .filter(client => selectedStatuses.includes(client.status))
       .filter(client =>
@@ -211,6 +227,7 @@ import { Button } from '@/components/shared/Button'
                   onChange={setSelectedStatuses}
                   />
               </div>
+              {/* choose empty message depending on whether DB has zero clients or filters returned nothing */}
               <DataTable
                 data={paginatedData}
                 columns={columns}
@@ -219,8 +236,22 @@ import { Button } from '@/components/shared/Button'
                 itemsPerPage={10}
                 onPageChange={goToPage}
                 isLoading={isLoading}
-                emptyStateTitle="Nenhum cliente cadastrado."
-                onCreateFirst={handleNewClient}
+                emptyStateTitle={
+                  clients.length === 0
+                    ? 'Nenhum cliente cadastrado.' // no clients in DB
+                    : filtered.length === 0
+                      ? 'Nenhum cliente encontrado' // clients exist, but not for current filters/search
+                      : 'Nenhum cliente cadastrado.'
+                }
+                emptyStateDescription={
+                  clients.length === 0
+                    ? undefined
+                    : filtered.length === 0
+                      ? 'Nenhum cliente corresponde aos filtros selecionados ou à sua busca.'
+                      : undefined
+                }
+                // only expose the 'create first' CTA when there are no clients at all
+                onCreateFirst={clients.length === 0 ? handleNewClient : undefined}
                 createFirstText="Criar o primeiro cliente"
               />
             </div>

@@ -357,7 +357,7 @@ function DashboardBackOffice({ user }: Props) {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Clientes Recentes</h2>
                 <button
-                  onClick={() => router.push('/clientes')}
+                  onClick={() => router.push('/backoffice/clients')}
                   className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                 >
                   Ver todos
@@ -518,7 +518,7 @@ function DashboardBackOffice({ user }: Props) {
                   </p>
                 </div>
                 <button
-                  onClick={() => router.push('/clientes?status=pending')}
+                  onClick={() => router.push('/backoffice/clients?status=pending')}
                   className="ml-auto px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition text-sm font-medium"
                 >
                   Revisar
