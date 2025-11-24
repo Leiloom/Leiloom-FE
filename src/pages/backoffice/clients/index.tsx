@@ -177,8 +177,18 @@ import { Button } from '@/components/shared/Button'
         toast.success('Cliente criado com sucesso!')
         setIsOpenModal(false)
         loadClients()
-      } catch {
-        toast.error('Erro ao salvar cliente.')
+      } catch (err: any) {
+        // Try to detect a CPF/CNPJ duplicate issue or a Conflict (409) and show a specific message
+        const backendMessage = err?.message || err?.response?.data?.message || ''
+        const status = err?.response?.status
+
+        const isCpfCnpjConflict = /cpf|cnpj|cpfcnpj|cliente cadastrado/i.test(String(backendMessage)) || status === 409
+
+        if (isCpfCnpjConflict) {
+          toast.error('Já existe um cliente cadastrado com este CPF/CNPJ.')
+        } else {
+          toast.error('Erro ao salvar cliente.')
+        }
       } finally {
         setIsLoading(false)
       }
