@@ -16,7 +16,20 @@ import { SearchBar } from '@/components/shared/SearchBar'
 import { useDynamicTitle } from '@/hooks/useDynamicTitle'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
+import { Cog } from 'lucide-react'
 import { Auction, CreateAuctionData, AuctionType } from '@/types/auction'
+// Importações Refatoradas
+import { useTagModal } from '../../../hooks/useTagModel'
+import TagConfigModal from '@/components/shared/TagConfigModal'
+
+// Mapa de Labels para o Modal de Tag
+const AUCTION_FIELD_LABELS: Record<string, string> = {
+  name: 'Nome',
+  type: 'Tipo',
+  url: 'URL (opcional)',
+  openingDate: 'Data de Abertura',
+  closingDate: 'Data de Encerramento'
+}
 
 function AuctionsAdminPage() {
   useDynamicTitle()
@@ -26,6 +39,14 @@ function AuctionsAdminPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [isOpenModal, setIsOpenModal] = useState(false)
+
+  // --- HOOK DE TAG MODAL (REFATORADO) ---
+  const { 
+    isOpen: isTagModalOpen, 
+    selectedField: selectedTagField, 
+    openTagModal, 
+    closeTagModal 
+  } = useTagModal()
 
   const [newAuction, setNewAuction] = useState<CreateAuctionData>({
     name: '',
@@ -138,6 +159,11 @@ function AuctionsAdminPage() {
     }
   }
 
+  const handleSaveTag = (tagValue: string) => {
+    console.log('Tag saved for auction field (no-op):', selectedTagField, tagValue)
+    closeTagModal()
+  }
+
   // 🔹 Visualizar detalhes
   function handleView(auction: Auction) {
     router.push(`/backoffice/auctions/${auction.id}`)
@@ -227,9 +253,19 @@ function AuctionsAdminPage() {
 
                     <form onSubmit={handleSave} className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Nome
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Nome
+                          </label>
+                          <button
+                            type="button"
+                            className="text-gray-500 hover:text-gray-700 p-1 ml-3"
+                            title="Configurar tag: Nome"
+                            onClick={() => openTagModal('name')}
+                          >
+                            <Cog className="h-4 w-4" />
+                          </button>
+                        </div>
                         <Input
                           id="name"
                           name="name"
@@ -244,9 +280,19 @@ function AuctionsAdminPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Tipo
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Tipo
+                          </label>
+                          <button
+                            type="button"
+                            className="text-gray-500 hover:text-gray-700 p-1 ml-3"
+                            title="Configurar tag: Tipo"
+                            onClick={() => openTagModal('type')}
+                          >
+                            <Cog className="h-4 w-4" />
+                          </button>
+                        </div>
                         <select
                           value={newAuction.type}
                           onChange={(e) =>
@@ -263,9 +309,19 @@ function AuctionsAdminPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          URL (opcional)
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-sm font-medium text-gray-700">
+                            URL (opcional)
+                          </label>
+                          <button
+                            type="button"
+                            className="text-gray-500 hover:text-gray-700 p-1 ml-3"
+                            title="Configurar tag: URL"
+                            onClick={() => openTagModal('url')}
+                          >
+                            <Cog className="h-4 w-4" />
+                          </button>
+                        </div>
                         <Input
                           id="url"
                           name="url"
@@ -280,9 +336,19 @@ function AuctionsAdminPage() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Data de Abertura
-                          </label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Data de Abertura
+                            </label>
+                            <button
+                              type="button"
+                              className="text-gray-500 hover:text-gray-700 p-1 ml-3"
+                              title="Configurar tag: Data de Abertura"
+                              onClick={() => openTagModal('openingDate')}
+                            >
+                              <Cog className="h-4 w-4" />
+                            </button>
+                          </div>
                           <Input
                             id="openingDate"
                             name="openingDate"
@@ -298,9 +364,19 @@ function AuctionsAdminPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Data de Encerramento
-                          </label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Data de Encerramento
+                            </label>
+                            <button
+                              type="button"
+                              className="text-gray-500 hover:text-gray-700 p-1 ml-3"
+                              title="Configurar tag: Data de Encerramento"
+                              onClick={() => openTagModal('closingDate')}
+                            >
+                              <Cog className="h-4 w-4" />
+                            </button>
+                          </div>
                           <Input
                             id="closingDate"
                             name="closingDate"
@@ -338,6 +414,15 @@ function AuctionsAdminPage() {
             </div>
           </Dialog>
         </Transition>
+
+        {/* 🔹 Componente Refatorado do Modal de Tag */}
+        <TagConfigModal
+          isOpen={isTagModalOpen}
+          onClose={closeTagModal}
+          onSave={handleSaveTag}
+          fieldLabel={selectedTagField ? AUCTION_FIELD_LABELS[selectedTagField] : ''}
+          isLoading={isLoading}
+        />
       </div>
     </MainLayout>
   )
