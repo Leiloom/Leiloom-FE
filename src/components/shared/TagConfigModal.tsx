@@ -9,6 +9,7 @@ interface TagConfigModalProps {
   onSave: (tag: string) => void
   fieldLabel: string
   isLoading?: boolean
+  initialValue?: string // 🔹 Nova prop para receber o valor atual
 }
 
 export default function TagConfigModal({
@@ -16,16 +17,19 @@ export default function TagConfigModal({
   onClose,
   onSave,
   fieldLabel,
-  isLoading = false
+  isLoading = false,
+  initialValue = '' // 🔹 Valor padrão vazio
 }: TagConfigModalProps) {
   const [tagInput, setTagInput] = useState('')
 
-  // Reseta o input sempre que o modal abre
+  // 🔹 Atualiza o input com o valor inicial sempre que o modal abrir
   useEffect(() => {
-    if (isOpen) setTagInput('')
-  }, [isOpen])
+    if (isOpen) {
+      setTagInput(initialValue || '')
+    }
+  }, [isOpen, initialValue])
 
-  // Listener para ESC (Embora o Dialog do Headless UI já faça isso, mantivemos para garantir a lógica original de verificar !isLoading)
+  // Listener para ESC
   useEffect(() => {
     if (!isOpen) return
     function onKey(e: KeyboardEvent) {
@@ -37,6 +41,7 @@ export default function TagConfigModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    // Envia o valor (mesmo que vazio, para disparar a deleção no pai)
     onSave(tagInput)
   }
 
@@ -74,18 +79,20 @@ export default function TagConfigModal({
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label htmlFor="tag-input" className="block text-sm font-medium text-gray-700 mb-1">
-                      Tag
+                      Seletor CSS
                     </label>
                     <Input
                       id="tag-input"
                       name="tag"
                       type="text"
-                      placeholder="Digite uma tag"
+                      placeholder="Ex: .product-title ou #price"
                       value={tagInput}
                       onChange={(e) => setTagInput(e.target.value)}
                       disabled={isLoading}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Campo sem persistência por enquanto.</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                        Deixe vazio e salve para remover a configuração.
+                    </p>
                   </div>
 
                   <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
@@ -93,7 +100,7 @@ export default function TagConfigModal({
                       Cancelar
                     </Button>
                     <Button type="submit" variant="primary" disabled={isLoading}>
-                      Salvar Tag
+                      {isLoading ? 'Salvando...' : 'Salvar Tag'}
                     </Button>
                   </div>
                 </form>

@@ -5,6 +5,7 @@ import { toast } from 'react-toastify'
 import { getAuctionById, updateAuction, deleteAuction } from '@/services/auctionService'
 import { getLotsByAuction, createLot, updateLot, deleteLot } from '@/services/lotService'
 import { createAuctionItem, updateAuctionItem, deleteAuctionItem } from '@/services/auctionItemService'
+import { saveScrapingConfig, getAllScrapingConfigs, deleteScrapingConfig } from '@/services/scrapingConfigService'
 import { Button } from '@/components/shared/Button'
 import { Input } from '@/components/shared/Input'
 import { useRouter, useParams } from 'next/navigation'
@@ -14,7 +15,6 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import AuctionEditModal from '../../../../components/backoffice/auctions/AuctionEditModal'
 import { ConfirmationModal } from '@/components/shared/ConfirmationModal'
 import { Dialog, Transition } from '@headlessui/react'
-// Importações Refatoradas
 import { useTagModal } from '../../../../hooks/useTagModel'
 import TagConfigModal from '@/components/shared/TagConfigModal'
 
@@ -31,7 +31,9 @@ import {
   Package,
   FolderOpen,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Check,
+  X as XIcon
 } from 'lucide-react'
 
 import { AuctionItem, AuctionType } from '@/types/auction'
@@ -41,7 +43,7 @@ import { AuctionItem, AuctionType } from '@/types/auction'
 // Mapa de Labels para o Modal de Tag
 const ITEM_FIELD_LABELS: Record<string, string> = {
   title: 'Título do Item',
-  type: 'Tipo do Item',
+  itemType: 'Tipo do Item',
   description: 'Descrição',
   basePrice: 'Preço Base',
   increment: 'Incremento',
@@ -52,9 +54,28 @@ const ITEM_FIELD_LABELS: Record<string, string> = {
   propertyType: 'Tipo de Imóvel',
   area: 'Área',
   bedrooms: 'Quartos',
-  parkingSpots: 'Vagas de Garagem',
+  parkingSpots: 'Vagas',
   status: 'Status do Item',
   images: 'Links das Imagens'
+}
+
+// Mapa De/Para: Nome do campo no Frontend -> Enum no Banco
+const ITEM_FIELD_ENUM_MAP: Record<string, string> = {
+  title: 'ITEM_TITLE',
+  itemType: 'ITEM_TYPE',
+  description: 'ITEM_DESCRIPTION',
+  basePrice: 'ITEM_BASE_PRICE',
+  increment: 'ITEM_INCREMENT',
+  state: 'ITEM_STATE',
+  city: 'ITEM_CITY',
+  location: 'ITEM_LOCATION',
+  zipCode: 'ITEM_ZIP_CODE',
+  status: 'ITEM_STATUS',
+  images: 'ITEM_IMAGES',
+  propertyType: 'PROPERTY_TYPE',
+  area: 'PROPERTY_AREA',
+  bedrooms: 'PROPERTY_BEDROOMS',
+  parkingSpots: 'PROPERTY_PARKING_SPOTS',
 }
 
 interface Lot {
@@ -99,12 +120,15 @@ function AuctionDetailPage() {
   const [isLotModalOpen, setIsLotModalOpen] = useState(false)
   const [isItemModalOpen, setIsItemModalOpen] = useState(false)
   
-  // --- ESTADO DO MODAL DE TAG (REFATORADO) ---
-  // Utilizamos Generics <string> porque precisamos salvar o ID do item no contexto
+  // --- CONFIGURAÇÕES DE SCRAPING ---
+  const [scrapingConfigs, setScrapingConfigs] = useState<any[]>([])
+  const [pendingItemTags, setPendingItemTags] = useState<Record<string, string>>({})
+
+  // --- ESTADO DO MODAL DE TAG ---
   const { 
     isOpen: isTagModalOpen, 
     selectedField: selectedTagField, 
-    contextData: selectedTagItemId, // Renomeamos o contextData para ficar claro que é o ID
+    contextData: selectedTagItemId, 
     openTagModal: openTagModalHook, 
     closeTagModal 
   } = useTagModal<string>()
@@ -152,7 +176,7 @@ function AuctionDetailPage() {
     }
   }, [isItemModalOpen, editingItem, itemAction])
 
-  // Fechar modals com ESC (Lógica manual mantida para modais de Lot/Item)
+  // Fechar modals com ESC
   useEffect(() => {
     if (!isLotModalOpen) return
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape' && !isLoading) setIsLotModalOpen(false) }
@@ -167,7 +191,20 @@ function AuctionDetailPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [isItemModalOpen, isLoading])
 
-  // Nota: O useEffect do TagModal foi removido pois o componente TagConfigModal já gerencia isso.
+  // --- BUSCA DE CONFIGS DE SCRAPING ---
+  const fetchScrapingConfigs = useCallback(async () => {
+    if (!auctionId) return
+    try {
+        const configs = await getAllScrapingConfigs(auctionId)
+        setScrapingConfigs(configs)
+    } catch (err) {
+        console.error('Erro ao buscar configs de scraping:', err)
+    }
+  }, [auctionId])
+
+  useEffect(() => {
+    fetchScrapingConfigs()
+  }, [fetchScrapingConfigs])
 
   // --- HANDLERS PRINCIPAIS ---
 
@@ -378,6 +415,7 @@ function AuctionDetailPage() {
   const handleAddItem = (lotId: string) => {
     setSelectedLotId(lotId)
     setEditingItem(null)
+    setPendingItemTags({}) // Resetar tags pendentes
     setItemAction('create')
     setIsItemModalOpen(true)
   }
@@ -392,22 +430,76 @@ function AuctionDetailPage() {
     setIsItemModalOpen(true)
   }
 
-  // --- TAG MODAL HANDLERS (REFATORADO) ---
-  
-  // Wrapper para preparar os dados antes de chamar o hook
+  // --- TAG MODAL HANDLERS ---
   const handleOpenTagModal = (field: string, item?: AuctionItem) => {
-    // Define qual ID de item estamos editando (seja um novo item ou um existente)
     const itemId = item?.id ?? editingItem?.id ?? ''
     openTagModalHook(field, itemId)
   }
 
   const handleSaveTag = async (tagValue: string) => {
-    // Aqui você integraria com a API se a tag fosse salva no backend
-    // O selectedTagItemId vem do contexto do hook
-    console.log('Tag saved (no-op):', { itemId: selectedTagItemId, tag: tagValue })
-    
-    // Fechar e limpar
-    closeTagModal()
+    if (!selectedTagField) return
+
+    // Verifica se estamos editando um item existente (tem ID) ou criando um novo
+    if (selectedTagItemId) {
+      // --- MODO EDIÇÃO (Item já existe no banco) ---
+      if (!auctionId) return
+      setIsLoading(true)
+      try {
+        if (!tagValue || tagValue.trim() === '') {
+            // DELETAR: Busca a config correspondente na lista carregada
+            const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
+            const configToDelete = scrapingConfigs.find(c => c.itemId === selectedTagItemId && c.fieldType === enumType)
+            
+            if (configToDelete) {
+                await deleteScrapingConfig(configToDelete.id)
+                toast.info(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" removida.`)
+            }
+        } else {
+            // SALVAR
+            await saveScrapingConfig({
+                auctionId,
+                itemId: selectedTagItemId,
+                fieldName: selectedTagField,
+                selector: tagValue
+            })
+            toast.success(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" salva com sucesso!`)
+        }
+        await fetchScrapingConfigs() // Atualiza ícones
+      } catch (error) {
+        toast.error('Erro ao processar configuração.')
+      } finally {
+        setIsLoading(false)
+        closeTagModal()
+      }
+    } else {
+      // --- MODO CRIAÇÃO (Item novo, ainda não salvo) ---
+      if (!tagValue || tagValue.trim() === '') {
+          // Se vazio, remove do objeto de tags pendentes
+          setPendingItemTags(prev => {
+              const newState = { ...prev }
+              delete newState[selectedTagField]
+              return newState
+          })
+      } else {
+          // Se tem valor, atualiza o estado
+          setPendingItemTags(prev => ({ ...prev, [selectedTagField]: tagValue }))
+      }
+      closeTagModal()
+    }
+  }
+
+  const getCurrentSelector = () => {
+      if (!selectedTagField) return ''
+
+      // Se temos um ID de item (Edição), buscamos nas configs carregadas do banco
+      if (selectedTagItemId) {
+          const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
+          const config = scrapingConfigs.find(c => c.itemId === selectedTagItemId && c.fieldType === enumType)
+          return config ? config.selector : ''
+      } 
+      
+      // Se não temos ID (Criação), buscamos no estado local de pendentes
+      return pendingItemTags[selectedTagField] || ''
   }
 
   const handleSaveItem = async (formData: FormData) => {
@@ -449,16 +541,35 @@ function AuctionDetailPage() {
         }
       }
 
+      let targetItemId: string | undefined
+
       if (itemAction === 'edit' && editingItem) {
         await updateAuctionItem(editingItem.id, itemData)
+        targetItemId = editingItem.id
         toast.success('Item atualizado com sucesso!')
       } else {
-        await createAuctionItem(itemData)
+        const createdItem = await createAuctionItem(itemData)
+        targetItemId = createdItem?.id
         toast.success('Item criado com sucesso!')
+      }
+
+      // Salva tags pendentes
+      if (targetItemId && auctionId && Object.keys(pendingItemTags).length > 0) {
+        await Promise.all(
+          Object.entries(pendingItemTags).map(([fieldName, selector]) => 
+            saveScrapingConfig({
+              auctionId: auctionId!,
+              itemId: targetItemId!,
+              fieldName: fieldName,
+              selector: selector
+            })
+          )
+        )
       }
 
       setIsItemModalOpen(false)
       await fetchData()
+      await fetchScrapingConfigs()
     } catch (error) {
       toast.error('Erro ao salvar item')
       console.error('Erro ao salvar item:', error)
@@ -487,6 +598,7 @@ function AuctionDetailPage() {
     try {
       await updateAuction(auctionId, { ...auction, type: auction.type as AuctionType, updatedBy: 'system' })
       toast.success('Leilão atualizado com sucesso!')
+      await fetchData()
     } catch (error) {
       toast.error('Erro ao atualizar leilão')
     } finally {
@@ -494,6 +606,29 @@ function AuctionDetailPage() {
     }
   }
   
+  // --- HELPERS VISUAIS (Ícones de Config) ---
+  const renderStatusIcon = (fieldName: string, item?: AuctionItem) => {
+    if (!item || !item.id) {
+        return <XIcon className="h-3 w-3 text-red-500 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+    }
+    const enumType = ITEM_FIELD_ENUM_MAP[fieldName]
+    const isConfigured = scrapingConfigs.some(c => c.itemId === item.id && c.fieldType === enumType)
+    
+    if (isConfigured) {
+        return <Check className="h-3 w-3 text-blue-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+    }
+    return <XIcon className="h-3 w-3 text-red-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+  }
+
+  const renderCogButton = (fieldName: string, item?: AuctionItem) => (
+    <div className="relative inline-block ml-3">
+        <button type="button" className="text-gray-500 hover:text-gray-700 p-1 focus:outline-none" onClick={() => handleOpenTagModal(fieldName, item)}>
+            <Cog className="h-4 w-4" />
+        </button>
+        {renderStatusIcon(fieldName, item)}
+    </div>
+  )
+
   // Estatísticas
   const totalItems = lots.reduce((acc, lot) => acc + (lot.items?.length || 0), 0)
   const availableItems = lots.reduce((acc, lot) => acc + (lot.items?.filter(item => item.status === 'AVAILABLE').length || 0), 0)
@@ -543,7 +678,6 @@ function AuctionDetailPage() {
           </div>
 
           <div className="space-y-8">
-            {/* Status Atual do Leilão */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className='bg-gray-50 border-gray-200 border rounded-lg p-6'>
                 <div className="flex items-center justify-between mb-4">
@@ -604,12 +738,10 @@ function AuctionDetailPage() {
               </div>
             </div>
 
-            {/* Modais de Leilão */}
             <AuctionEditModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleSaveAuctionEdit} auction={auction} isLoading={isLoading} />
             <ConfirmationModal isOpen={isDeactivateModalOpen} onClose={() => setIsDeactivateModalOpen(false)} onConfirm={handleConfirmToggleStatus} title="Desativar Leilão" message={`Tem certeza que deseja desativar o leilão "${auction?.name}"?`} confirmButtonText="Desativar" cancelButtonText="Cancelar" isLoading={isLoading} variant="danger" />
             <ConfirmationModal isOpen={isActivateModalOpen} onClose={() => setIsActivateModalOpen(false)} onConfirm={handleConfirmToggleStatus} title="Ativar Leilão" message={`Tem certeza que deseja ativar o leilão "${auction?.name}"?`} confirmButtonText="Ativar" cancelButtonText="Cancelar" isLoading={isLoading} variant="info" />
 
-            {/* Gerenciar Lotes Header */}
             <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
@@ -620,7 +752,6 @@ function AuctionDetailPage() {
               </div>
             </div>
 
-            {/* Lista de Lotes e Itens */}
             <div className="space-y-4">
               {lots.length === 0 ? (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 text-center">
@@ -704,7 +835,6 @@ function AuctionDetailPage() {
             </div>
           </div>
 
-          {/* Modal Create/Edit Lote */}
           <Transition appear show={isLotModalOpen} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={() => !isLoading && setIsLotModalOpen(false)}>
               <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/25" /></Transition.Child>
@@ -715,7 +845,7 @@ function AuctionDetailPage() {
                       <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">{lotAction === 'create' ? 'Adicionar Lote' : 'Editar Lote'}</Dialog.Title>
                       <form onSubmit={e => { e.preventDefault(); handleSaveLot(new FormData(e.currentTarget)) }} className="space-y-4">
                         <div>
-                          <label htmlFor="identification" className="block text-sm font-medium text-gray-700 mb-1">Identificação do Lote *</label>
+                          <label htmlFor="identification" className="block text-sm font-medium text-gray-700 mb-1">Identificação do Lote <span className="text-red-500">*</span></label>
                           <Input id="identification" name="identification" type="text" placeholder="Ex: Lote 001" defaultValue={editingLot?.identification} required disabled={isLoading} />
                         </div>
                         <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
@@ -730,7 +860,6 @@ function AuctionDetailPage() {
             </Dialog>
           </Transition>
 
-          {/* Modal Create/Edit Item */}
           <Transition appear show={isItemModalOpen} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={() => !isLoading && setIsItemModalOpen(false)}>
               <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/25" /></Transition.Child>
@@ -746,15 +875,15 @@ function AuctionDetailPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <label htmlFor="title" className="block text-sm font-medium text-gray-700">Título do Item *</label>
-                                <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('title', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                <label htmlFor="title" className="block text-sm font-medium text-gray-700">Título do Item <span className="text-red-500">*</span></label>
+                                {renderCogButton('title', editingItem ?? undefined)}
                               </div>
                               <Input id="title" name="title" type="text" defaultValue={editingItem?.title} required disabled={isLoading} />
                             </div>
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <label htmlFor="type" className="block text-sm font-medium text-gray-700">Tipo do Item *</label>
-                                <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('type', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                <label htmlFor="type" className="block text-sm font-medium text-gray-700">Tipo do Item <span className="text-red-500">*</span></label>
+                                {renderCogButton('itemType', editingItem ?? undefined)}
                               </div>
                               <select id="type" name="type" defaultValue={editingItem?.type || ''} required className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors" disabled={isLoading} onChange={(e) => { const pd = document.getElementById('property-details'); if (pd) pd.style.display = e.target.value === 'IMOVEL' ? 'block' : 'none' }}>
                                 <option value="">Selecione...</option>
@@ -768,7 +897,7 @@ function AuctionDetailPage() {
                           <div>
                             <div className="flex items-center justify-between mb-1">
                               <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descrição</label>
-                              <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('description', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                              {renderCogButton('description', editingItem ?? undefined)}
                             </div>
                             <textarea id="description" name="description" rows={5} defaultValue={editingItem?.description} className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors" disabled={isLoading} />
                           </div>
@@ -776,15 +905,15 @@ function AuctionDetailPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <label htmlFor="basePrice" className="block text-sm font-medium text-gray-700">Preço Base (R$) *</label>
-                                <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('basePrice', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                <label htmlFor="basePrice" className="block text-sm font-medium text-gray-700">Preço Base (R$) <span className="text-red-500">*</span></label>
+                                {renderCogButton('basePrice', editingItem ?? undefined)}
                               </div>
                               <Input id="basePrice" name="basePrice" type="number" step="0.01" min="0" defaultValue={editingItem?.basePrice.toString()} required disabled={isLoading} />
                             </div>
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <label htmlFor="increment" className="block text-sm font-medium text-gray-700">Incremento (R$) *</label>
-                                <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('increment', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                <label htmlFor="increment" className="block text-sm font-medium text-gray-700">Incremento (R$) <span className="text-red-500">*</span></label>
+                                {renderCogButton('increment', editingItem ?? undefined)}
                               </div>
                               <Input id="increment" name="increment" type="number" step="0.01" min="0" defaultValue={editingItem?.increment.toString()} required disabled={isLoading} />
                             </div>
@@ -795,8 +924,8 @@ function AuctionDetailPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <div className="flex items-center justify-between mb-1">
-                                  <label htmlFor="state" className="block text-sm font-medium text-gray-700">Estado *</label>
-                                  <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('state', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                  <label htmlFor="state" className="block text-sm font-medium text-gray-700">Estado <span className="text-red-500">*</span></label>
+                                  {renderCogButton('state', editingItem ?? undefined)}
                                 </div>
                                 <select id="state" name="state" value={selectedState} onChange={(e) => { setSelectedState(e.target.value); setSelectedCity('') }} required className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" disabled={isLoading}>
                                   <option value="">Selecione...</option>
@@ -805,8 +934,8 @@ function AuctionDetailPage() {
                               </div>
                               <div>
                                 <div className="flex items-center justify-between mb-1">
-                                  <label htmlFor="city" className="block text-sm font-medium text-gray-700">Cidade *</label>
-                                  <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('city', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                  <label htmlFor="city" className="block text-sm font-medium text-gray-700">Cidade <span className="text-red-500">*</span></label>
+                                  {renderCogButton('city', editingItem ?? undefined)}
                                 </div>
                                 <select id="city" name="city" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} required className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" disabled={isLoading || !selectedState}>
                                   <option value="">Selecione...</option>
@@ -817,14 +946,14 @@ function AuctionDetailPage() {
                             <div>
                               <div className="flex items-center justify-between mb-1">
                                 <label htmlFor="location" className="block text-sm font-medium text-gray-700">Endereço</label>
-                                <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('location', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                {renderCogButton('location', editingItem ?? undefined)}
                               </div>
                               <textarea id="location" name="location" rows={3} defaultValue={editingItem?.location || ''} className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 resize-none" disabled={isLoading} />
                             </div>
                             <div className="w-full md:w-1/2">
                               <div className="flex items-center justify-between mb-1">
                                 <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700">CEP</label>
-                                <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('zipCode', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                {renderCogButton('zipCode', editingItem ?? undefined)}
                               </div>
                               <Input id="zipCode" name="zipCode" type="text" defaultValue={editingItem?.zipCode || ''} disabled={isLoading} />
                             </div>
@@ -836,7 +965,7 @@ function AuctionDetailPage() {
                               <div>
                                 <div className="flex items-center justify-between mb-1">
                                   <label htmlFor="propertyType" className="block text-sm font-medium text-gray-700">Tipo de Imóvel</label>
-                                  <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('propertyType', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                  {renderCogButton('propertyType', editingItem ?? undefined)}
                                 </div>
                                 <select id="propertyType" name="propertyType" className="w-full border border-gray-300 rounded-md text-gray-700 shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" defaultValue={editingItem?.propertyDetails?.type || ''} disabled={isLoading}>
                                   <option value="">Selecione...</option>
@@ -851,21 +980,21 @@ function AuctionDetailPage() {
                               <div>
                                 <div className="flex items-center justify-between mb-1">
                                   <label htmlFor="area" className="block text-sm font-medium text-gray-700">Área (m²)</label>
-                                  <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('area', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                  {renderCogButton('area', editingItem ?? undefined)}
                                 </div>
                                 <Input id="area" name="area" type="number" step="0.01" min="0" defaultValue={editingItem?.propertyDetails?.area?.toString()} disabled={isLoading} />
                               </div>
                               <div>
                                 <div className="flex items-center justify-between mb-1">
                                   <label htmlFor="bedrooms" className="block text-sm font-medium text-gray-700">Quartos</label>
-                                  <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('bedrooms', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                  {renderCogButton('bedrooms', editingItem ?? undefined)}
                                 </div>
                                 <Input id="bedrooms" name="bedrooms" type="number" min="0" defaultValue={editingItem?.propertyDetails?.bedrooms?.toString()} disabled={isLoading} />
                               </div>
                               <div>
                                 <div className="flex items-center justify-between mb-1">
                                   <label htmlFor="parkingSpots" className="block text-sm font-medium text-gray-700">Vagas</label>
-                                  <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('parkingSpots', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                  {renderCogButton('parkingSpots', editingItem ?? undefined)}
                                 </div>
                                 <Input id="parkingSpots" name="parkingSpots" type="number" min="0" defaultValue={editingItem?.propertyDetails?.parkingSpots?.toString()} disabled={isLoading} />
                               </div>
@@ -876,7 +1005,7 @@ function AuctionDetailPage() {
                             <div>
                               <div className="flex items-center justify-between mb-1">
                                 <label htmlFor="status" className="block text-sm font-medium text-gray-700">Status do Item</label>
-                                <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('status', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                                {renderCogButton('status', editingItem ?? undefined)}
                               </div>
                               <select id="status" name="status" defaultValue={editingItem?.status} className="w-full border border-gray-300 rounded-md text-gray-700 shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors" disabled={isLoading}>
                                 <option value="AVAILABLE">Disponível</option>
@@ -889,13 +1018,13 @@ function AuctionDetailPage() {
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
                               <h3 className="text-md font-medium text-gray-900 flex items-center"><Package className="h-5 w-5 mr-2" /> Links das Imagens</h3>
-                              <button type="button" className="text-gray-500 hover:text-gray-700 p-1 ml-3" onClick={() => handleOpenTagModal('images', editingItem ?? undefined)}><Cog className="h-4 w-4" /></button>
+                              {renderCogButton('images', editingItem ?? undefined)}
                             </div>
                             <div id="image-links-container" className="space-y-2">
                               {(editingItem?.images || []).map((img, index) => (
                                 <Input 
                                   key={index}
-                                  id={`image-${index}`} // ✅ Adicionado ID único baseado no index
+                                  id={`image-${index}`}
                                   type="text" 
                                   name="images" 
                                   defaultValue={typeof img === 'string' ? img : img.url} 
@@ -903,9 +1032,8 @@ function AuctionDetailPage() {
                                 />
                               ))}
                               
-                              {/* Input para adicionar novo link */}
                               <Input 
-                                id="new-image-input" // ✅ Adicionado ID fixo para o input vazio
+                                id="new-image-input" 
                                 type="text" 
                                 name="images" 
                                 placeholder="https://exemplo.com/imagem.jpg" 
@@ -927,15 +1055,13 @@ function AuctionDetailPage() {
             </Dialog>
           </Transition>
 
-          {/* 🔹 Componente Refatorado do Modal de Tag 
-              Substitui todo o bloco de Transition/Dialog manual anterior.
-          */}
           <TagConfigModal
             isOpen={isTagModalOpen}
             onClose={closeTagModal}
             onSave={handleSaveTag}
             fieldLabel={selectedTagField ? ITEM_FIELD_LABELS[selectedTagField] : ''}
             isLoading={isLoading}
+            initialValue={getCurrentSelector()}
           />
 
         </div>
