@@ -1,6 +1,6 @@
 'use client'
 
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -9,20 +9,43 @@ import { acceptTerms, getCurrentTerms } from '@/services/termsService'
 import { toast } from 'react-toastify'
 import InfoTooltip from '@/components/shared/InfoToolTip'
 import PasswordField from '@/components/shared/PasswordField'
+import ConfirmPassWordField from '@/components/shared/ConfirmPasswordField'
 import { updateClientUser, updateClient } from '@/services/clientService'
 import { loginClient } from '@/services/authService'
 import { useAuthContext } from '@/contexts/AuthContext'
+import CPF from '../../validations/cpf';
+import CNPJ from '../../validations/cnpj';
+import CNPJAlfanumerico from '../../validations/cnpjAlfanumerico';
 
 const schema = z.object({
-  cpfCnpj: z.string().min(11, 'CPF ou CNPJ obrigatório'),
-  phone: z.string().min(10, 'Telefone obrigatório'),
+  cpfCnpj: z.string()
+    .min(11, 'CPF ou CNPJ obrigatório')
+    .refine((value) => {
+      const cleanedValue = value.replace(/[./-]/g , '').replace(/[^\dA-Z]/gi, '');
+        
+      if (cleanedValue.length === 11 && /^\d+$/.test(cleanedValue)) {
+        return CPF.isValid(value);
+      }
+      
+      if (cleanedValue.length === 14) {
+        if (/^\d+$/.test(cleanedValue)) {
+          return CNPJ.isValid(value);
+        }
+        // CNPJ alfanumérico
+        return CNPJAlfanumerico.isValid(value);
+      }
+      
+      return false;
+    }, { message: 'CPF ou CNPJ inválido' }),
+  phone: z.string().min(10, 'Telefone precisa ter no mínimo 10 dígitos')
+    .regex(/^\(?\d{2}\)?[\s-]?[\s9]?\d{4}-?\d{4}$/, 'Telefone no formato inválido'),
   password: z.string()
     .min(6, 'Senha precisa ter pelo menos 6 caracteres')
     .regex(/[A-Z]/, 'Deve conter ao menos uma letra maiúscula')
     .regex(/[a-z]/, 'Deve conter ao menos uma letra minúscula')
     .regex(/[0-9]/, 'Deve conter ao menos um número')
     .regex(/[^A-Za-z0-9]/, 'Deve conter ao menos um caractere especial'),
-  confirmPassword: z.string().min(6, 'Confirme a senha'),
+  confirmPassword: z.string(),
   acceptTerms: z.literal(true, {
     errorMap: () => ({ message: 'É necessário aceitar os Termos de Uso' }),
   }),
@@ -39,11 +62,36 @@ export default function StepThreeDetails({ onNext }: { onNext: () => void }) {
   const { login } = useAuthContext()
   const { formData, setFormData } = useRegisterClient()
   if (!formData?.clientUserId) return null;
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  // helper to progressively format phone to (XX) XXXX-XXXX or (XX) 9XXXX-XXXX
+  const formatPhone = (value = '') => {
+    const digits = value.replace(/\D/g, '')
+    if (!digits) return ''
+
+    // keep only up to 11 digits (2 area + up to 9 number)
+    const cleaned = digits.slice(0, 11)
+
+    // area code
+    const area = cleaned.slice(0, 2)
+    const rest = cleaned.slice(2)
+
+    if (!rest) return `(${area}`
+
+    // if rest is <= 4 digits show simple block
+    if (rest.length <= 4) return `(${area}) ${rest}`
+
+    // if rest has more than 4 digits, split last 4
+    const first = rest.slice(0, rest.length - 4)
+    const last = rest.slice(-4)
+
+    return `(${area}) ${first}-${last}`
+  }
+
+  const { register, control, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       cpfCnpj: formData.cpfCnpj,
-      phone: formData.phone,
+      // store default phone already formatted to the expected mask
+      phone: formData.phone ? formatPhone(formData.phone) : '',
       password: formData.password
     }
   })
@@ -68,10 +116,10 @@ async function onSubmit(data: FormData) {
 
     login(token, 'CLIENT')
     
-    await acceptTerms({
-      clientUserId: formData.clientUserId,
-      termsId: currentTerms?.id || '',
-    })
+    // await acceptTerms({
+    //   clientUserId: formData.clientUserId,
+    //   termsId: currentTerms?.id || '',
+    // })
 
     await updateClientUser(
       formData.clientUserId,
@@ -103,20 +151,36 @@ async function onSubmit(data: FormData) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div>
-        <label className="block mb-1 text-sm text-black">CPF ou CNPJ</label>
-        <input {...register('cpfCnpj')} className="w-full border px-3 py-2 rounded text-black" />
+        <label className="block mb-1 text-sm text-black ">CPF ou CNPJ <span className="text-red-500">*</span></label>
+        <input {...register('cpfCnpj')} className="w-full border border-gray-300 rounded px-3 py-2 text-black" />
         {errors.cpfCnpj && <p className="text-red-500 text-xs">{errors.cpfCnpj.message}</p>}
       </div>
 
       <div>
-        <label className="block mb-1 text-sm text-black">Telefone</label>
-        <input {...register('phone')} className="w-full border px-3 py-2 rounded text-black" />
+        <label className="block mb-1 text-sm text-black">Telefone <span className="text-red-500">*</span></label>
+        {/* Use Controller so we can format the phone as the user types */}
+        <Controller
+          control={control}
+          name="phone"
+          render={({ field }) => (
+            <input
+              {...field}
+              onChange={(e) => {
+                  // apply formatting while the user types (keeps optional leading 9)
+                  const formatted = formatPhone(e.target.value)
+                  field.onChange(formatted)
+                }}
+              value={field.value ?? ''}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-black"
+            />
+          )}
+        />
         {errors.phone && <p className="text-red-500 text-xs">{errors.phone.message}</p>}
       </div>
       <hr className="border-t border-gray-300 my-4" />
       <div>
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 block mb-1 text-black">
-          Senha
+        <label className="flex items-center gap-2 text-sm font-mediu mb-1 text-black">
+          Senha <span className="text-red-500">*</span>
           <InfoTooltip
             text={
               <div className="text-xs space-y-1">
@@ -132,13 +196,13 @@ async function onSubmit(data: FormData) {
             }
           />
         </label>
-        <PasswordField register={register('password')} error={errors.password} />
+        <PasswordField register={register('password')} />
         {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
       </div>
 
       <div>
-        <label className="block mb-1 text-sm text-black">Confirme a Senha</label>
-        <PasswordField register={register('confirmPassword')} error={errors.confirmPassword} />
+        <label className="block mb-1 text-sm text-black">Confirme a Senha <span className="text-red-500">*</span></label>
+        <ConfirmPassWordField register={register('confirmPassword')} />
         {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword.message}</p>}
       </div>
 

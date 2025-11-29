@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'react-toastify'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { forgotPassword } from '@/services/authService'
 import MainLayout from '@/layouts/MainLayout'
 
@@ -15,6 +16,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function ForgotPasswordPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const {
     register,
@@ -25,11 +27,14 @@ export default function ForgotPasswordPage() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
-      await forgotPassword({ email: data.email, context: 'CLIENT' }) 
-      toast.success('Se houver uma conta com esse e-mail, enviamos as instruções.')
+      const response = await forgotPassword({ email: data.email, context: 'CLIENT' }) 
+      toast.success('Redirecionando para redefinição de senha...')
+      // Redireciona para a página de reset-password com o token
+      setTimeout(() => {
+        router.push(`/reset-password?token=${response.token}`)
+      }, 1000)
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao solicitar redefinição de senha.')
-    } finally {
       setLoading(false)
     }
   }
@@ -49,7 +54,7 @@ export default function ForgotPasswordPage() {
       </Head>
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white shadow-md p-8 rounded w-full max-w-md space-y-6">
-          <h1 className="text-2xl font-bold text-center text-gray-800">Recuperar Senha</h1>
+        <h1 className="text-2xl font-bold text-center text-gray-800">Recuperar Senha</h1>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
               <label className="block text-sm text-black">Seu e-mail</label>

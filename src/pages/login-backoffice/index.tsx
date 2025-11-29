@@ -124,7 +124,7 @@ export default function BackOfficeLoginPage() {
 
             <div>
               <label className="block text-sm text-black font-medium mb-1">Senha</label>
-              <PasswordField register={register('password')} error={errors.password} disabled={loading} />
+              <PasswordField register={register('password')} disabled={loading} />
               {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
             </div>
 
