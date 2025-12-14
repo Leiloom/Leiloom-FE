@@ -15,7 +15,9 @@ import {
   DocumentTextIcon,
   CurrencyDollarIcon,
   UserGroupIcon,
-  ScaleIcon 
+  ScaleIcon,
+  BuildingOfficeIcon,
+  TruckIcon 
 } from '@heroicons/react/20/solid'
 import { useRouter } from 'next/navigation'
 import { useAuthContext } from '@/contexts/AuthContext'
@@ -57,6 +59,14 @@ export default function Navbar() {
             <Link href="/auctions" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <ScaleIcon className="h-4 w-4" />
               Leilões
+            </Link>
+            <Link href="/auctions?itemType=IMOVEL" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <BuildingOfficeIcon className="h-4 w-4" />
+              Imovéis
+            </Link>
+            <Link href="/auctions?itemType=VEICULO" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <TruckIcon className="h-4 w-4" />
+              Veículos
             </Link>
             <Link href="/users" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <UsersIcon className="h-4 w-4" />
@@ -184,6 +194,22 @@ export default function Navbar() {
                 >
                   <ScaleIcon className="h-5 w-5" />
                   Leilões
+                </Link>
+                <Link
+                  href="/auctions?itemType=IMOVEL"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                >
+                  <BuildingOfficeIcon className="h-5 w-5" />
+                  Imovéis
+                </Link>
+                <Link
+                  href="/auctions?itemType=VEICULO"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                >
+                  <TruckIcon className="h-5 w-5" />
+                  Veículos
                 </Link>
                 <Link
                   href="/users"
