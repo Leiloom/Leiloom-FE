@@ -146,4 +146,4 @@ Responsável: Matheus Souza
 ├── package.json
 ├── postcss.config.js
 ├── tailwind.config.ts
-└── tsconfig.json
+└── tsconfig.json 
