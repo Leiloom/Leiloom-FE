@@ -14,6 +14,9 @@ import { MultiSelectDropdown } from '@/components/shared/MultiSelectDropdown'
 import { Button } from '@/components/shared/Button'
 import AuctionMap from '@/components/maps/AuctionMap'
 import { getDetailedPaymentSummary } from '@/services/paymentService'
+import { useSearchParams } from 'next/navigation'
+import { ItemType } from '@/types/auction'
+import { useMemo } from 'react'
 
 
 interface Props {
@@ -57,6 +60,19 @@ function AuctionsPage({ user }: Props) {
     const [selectedStates, setSelectedStates] = useState<string[]>([])
     const [selectedCities, setSelectedCities] = useState<string[]>([])
     const [hasActivePlan, setHasActivePlan] = useState<boolean | null>(null)
+    
+    const searchParams = useSearchParams()
+    const itemTypeParam = useMemo(
+        () => searchParams.get('itemType'),
+        [searchParams]
+    ) as ItemType | null
+
+    const pageTitle =
+        itemTypeParam === 'IMOVEL'
+            ? 'Leilões de Imóveis'
+            : itemTypeParam === 'VEICULO'
+            ? 'Leilões de Veículos'
+            : 'Leilões Disponíveis'
 
     useEffect(() => {
         validateActivePlan()
@@ -68,7 +84,7 @@ function AuctionsPage({ user }: Props) {
 
     useEffect(() => {
         applyFilters()
-    }, [filters, auctions])
+    }, [filters, auctions, itemTypeParam])
 
     useEffect(() => {
         if (selectedAuction) router.push(`/auctions/${selectedAuction.id}`)
@@ -150,6 +166,12 @@ function AuctionsPage({ user }: Props) {
         let result = auctions.map((auction) => {
             const filteredLots = auction.lots?.map((lot) => {
                 let filteredItems = lot.items || []
+
+                if (itemTypeParam) {
+                    filteredItems = filteredItems.filter(
+                    (item) => item.type === itemTypeParam
+                    )
+                }
 
                 if (filters.search) {
                     const searchLower = filters.search.toLowerCase()
@@ -348,7 +370,7 @@ function AuctionsPage({ user }: Props) {
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                             <div>
-                                <h1 className="text-2xl font-bold text-gray-900">Leilões Disponíveis</h1>
+                                <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
                                 <p className="text-gray-600 mt-2">
                                     Explore e participe dos melhores leilões online e presenciais
                                 </p>
