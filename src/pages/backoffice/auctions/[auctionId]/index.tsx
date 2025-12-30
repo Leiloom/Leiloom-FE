@@ -56,7 +56,19 @@ const ITEM_FIELD_LABELS: Record<string, string> = {
   bedrooms: 'Quartos',
   parkingSpots: 'Vagas',
   status: 'Status do Item',
-  images: 'Links das Imagens'
+  images: 'Links das Imagens',
+  condition: 'Condição de Uso',
+  financing: 'Apartamento para financiamento',
+  additionalExpensesDescription: 'Descrição Despesas Adicionais',
+  additionalExpensesValue: 'Valor Despesas Adicionais',
+  auctioneeerCommission: 'Comissão Leiloeiro',
+  yearManufacturing: 'Ano Fabricação',
+  yearModel: 'Ano Modelo',
+  brand: 'Marca',
+  model: 'Modelo',
+  color: 'Cor',
+  kilometers: 'Quilometragem',
+  damage: 'Sinistro'
 }
 
 // Mapa De/Para: Nome do campo no Frontend -> Enum no Banco
@@ -76,6 +88,18 @@ const ITEM_FIELD_ENUM_MAP: Record<string, string> = {
   area: 'PROPERTY_AREA',
   bedrooms: 'PROPERTY_BEDROOMS',
   parkingSpots: 'PROPERTY_PARKING_SPOTS',
+  condition: 'PROPERTY_CONDITION',
+  financing: 'PROPERTY_FINANCING',
+  additionalExpensesDescription: 'PROPERTY_ADDITIONAL_EXPENSES_DESCRIPTION',
+  additionalExpensesValue: 'PROPERTY_ADDITIONAL_EXPENSES_VALUE',
+  auctioneeerCommission: 'PROPERTY_AUCTIONEER_COMMISSION',
+  yearManufacturing: 'VEHICLE_YEAR_MANUFACTURING',
+  yearModel: 'VEHICLE_YEAR_MODEL',
+  brand: 'VEHICLE_BRAND',
+  model: 'VEHICLE_MODEL',
+  color: 'VEHICLE_COLOR',
+  kilometers: 'VEHICLE_KILOMETERS',
+  damage: 'VEHICLE_DAMAGE',
 }
 
 interface Lot {
@@ -139,6 +163,7 @@ function AuctionDetailPage() {
   const [editingItem, setEditingItem] = useState<AuctionItem | null>(null)
   const [selectedLotId, setSelectedLotId] = useState<string>('')
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false)
+  const [selectedItemType, setSelectedItemType] = useState<string>('')
 
   const [states, setStates] = useState<{ id: number; sigla: string; nome: string }[]>([])
   const [cities, setCities] = useState<{ id: number; nome: string }[]>([])
@@ -190,6 +215,13 @@ function AuctionDetailPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [isItemModalOpen, isLoading])
+
+  // Resetar selectedItemType ao fechar modal
+  useEffect(() => {
+    if (!isItemModalOpen) {
+      setSelectedItemType('')
+    }
+  }, [isItemModalOpen])
 
   // --- BUSCA DE CONFIGS DE SCRAPING ---
   const fetchScrapingConfigs = useCallback(async () => {
@@ -261,14 +293,20 @@ function AuctionDetailPage() {
       ])
       
       const normalizeImages = (items?: any[]) =>
-        (items || []).map(item => ({
-          ...item,
-          images: (item.images || []).map((img: any) =>
-            typeof img === 'string'
-              ? { id: crypto.randomUUID?.() ?? Math.random().toString(), url: img }
-              : { id: img.id ?? crypto.randomUUID?.() ?? Math.random().toString(), url: img.url }
-          ),
-        }))
+        (items || []).map(item => {
+          const normalizedItem: any = {
+            ...item,
+            images: (item.images || []).map((img: any) =>
+              typeof img === 'string'
+                ? { id: crypto.randomUUID?.() ?? Math.random().toString(), url: img }
+                : { id: img.id ?? crypto.randomUUID?.() ?? Math.random().toString(), url: img.url }
+            ),
+          }
+          // Garantir que propertyDetails e vehicleDetails sejam preservados
+          if (item.propertyDetails) normalizedItem.propertyDetails = item.propertyDetails
+          if (item.vehicleDetails) normalizedItem.vehicleDetails = item.vehicleDetails
+          return normalizedItem
+        })
 
       const normalizedLots = (lotsData || []).map((lot: any) => ({
         ...lot,
@@ -415,6 +453,7 @@ function AuctionDetailPage() {
   const handleAddItem = (lotId: string) => {
     setSelectedLotId(lotId)
     setEditingItem(null)
+    setSelectedItemType('')
     setPendingItemTags({}) // Resetar tags pendentes
     setItemAction('create')
     setIsItemModalOpen(true)
@@ -426,6 +465,7 @@ function AuctionDetailPage() {
       typeof img === 'string' ? { id: crypto.randomUUID?.() ?? Math.random().toString(), url: img } : img
     )
     setEditingItem({ ...item, images: normalizedImages })
+    setSelectedItemType(item.type)
     setItemAction('edit')
     setIsItemModalOpen(true)
   }
@@ -464,7 +504,7 @@ function AuctionDetailPage() {
             })
             toast.success(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" salva com sucesso!`)
         }
-        await fetchScrapingConfigs() // Atualiza ícones
+        await fetchScrapingConfigs()
       } catch (error) {
         toast.error('Erro ao processar configuração.')
       } finally {
@@ -491,14 +531,14 @@ function AuctionDetailPage() {
   const getCurrentSelector = () => {
       if (!selectedTagField) return ''
 
-      // Se temos um ID de item (Edição), buscamos nas configs carregadas do banco
+      
       if (selectedTagItemId) {
           const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
           const config = scrapingConfigs.find(c => c.itemId === selectedTagItemId && c.fieldType === enumType)
           return config ? config.selector : ''
       } 
       
-      // Se não temos ID (Criação), buscamos no estado local de pendentes
+      
       return pendingItemTags[selectedTagField] || ''
   }
 
@@ -530,13 +570,45 @@ function AuctionDetailPage() {
         const area = formData.get('area') as string
         const bedrooms = formData.get('bedrooms') as string
         const parkingSpots = formData.get('parkingSpots') as string
+        const condition = formData.get('condition') as string
+        const financing = formData.get('financing') as string
+        const additionalExpensesDescription = formData.get('additionalExpensesDescription') as string
+        const additionalExpensesValue = formData.get('additionalExpensesValue') as string
+        const auctioneeerCommission = formData.get('auctioneeerCommission') as string
 
-        if (propertyType || area || bedrooms || parkingSpots) {
+        if (propertyType || area || bedrooms || parkingSpots || condition || financing || additionalExpensesDescription || additionalExpensesValue || auctioneeerCommission) {
           itemData.propertyDetails = {
             type: propertyType || '',
             area: area ? parseFloat(area) : undefined,
             bedrooms: bedrooms ? parseInt(bedrooms) : undefined,
-            parkingSpots: parkingSpots ? parseInt(parkingSpots) : undefined
+            parkingSpots: parkingSpots ? parseInt(parkingSpots) : undefined,
+            condition: condition || undefined,
+            financing: financing || undefined,
+            additionalExpensesDescription: additionalExpensesDescription || undefined,
+            additionalExpensesValue: additionalExpensesValue ? parseFloat(additionalExpensesValue) : undefined,
+            auctioneeerCommission: auctioneeerCommission ? parseFloat(auctioneeerCommission) : undefined
+          }
+        }
+      }
+
+      if (itemData.type === 'VEICULO') {
+        const yearManufacturing = formData.get('yearManufacturing') as string
+        const yearModel = formData.get('yearModel') as string
+        const brand = formData.get('brand') as string
+        const model = formData.get('model') as string
+        const color = formData.get('color') as string
+        const kilometers = formData.get('kilometers') as string
+        const damage = formData.get('damage') as string
+
+        if (yearManufacturing || yearModel || brand || model || color || kilometers || damage) {
+          itemData.vehicleDetails = {
+            yearManufacturing: yearManufacturing ? parseInt(yearManufacturing) : undefined,
+            yearModel: yearModel ? parseInt(yearModel) : undefined,
+            brand: brand || undefined,
+            model: model || undefined,
+            color: color || undefined,
+            kilometers: kilometers ? parseFloat(kilometers) : undefined,
+            damage: damage || undefined
           }
         }
       }
@@ -579,14 +651,25 @@ function AuctionDetailPage() {
   }
 
   const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('Tem certeza que deseja cancelar este item?')) return
+    // Encontrar o item para ver seu status
+    const item = lots.flatMap(lot => lot.items || []).find(i => i.id === itemId)
+    
+    if (!item) {
+      toast.error('Item não encontrado')
+      return
+    }
+
+    const confirmMessage = 'Tem certeza que deseja cancelar este item?'
+
+    if (!confirm(`${confirmMessage}\n\n`)) return
+    
     setIsLoading(true)
     try {
       await deleteAuctionItem(itemId)
       toast.success('Item cancelado com sucesso!')
       await fetchData()
     } catch (error) {
-      toast.error('Erro ao cancelar item')
+      toast.error(`Erro ao cancelar item`)
     } finally {
       setIsLoading(false)
     }
@@ -885,7 +968,7 @@ function AuctionDetailPage() {
                                 <label htmlFor="type" className="block text-sm font-medium text-gray-700">Tipo do Item <span className="text-red-500">*</span></label>
                                 {renderCogButton('itemType', editingItem ?? undefined)}
                               </div>
-                              <select id="type" name="type" defaultValue={editingItem?.type || ''} required className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors" disabled={isLoading} onChange={(e) => { const pd = document.getElementById('property-details'); if (pd) pd.style.display = e.target.value === 'IMOVEL' ? 'block' : 'none' }}>
+                              <select id="type" name="type" value={selectedItemType} onChange={(e) => setSelectedItemType(e.target.value)} required className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors" disabled={isLoading}>
                                 <option value="">Selecione...</option>
                                 <option value="IMOVEL">Imóvel</option>
                                 <option value="VEICULO">Veículo</option>
@@ -959,7 +1042,7 @@ function AuctionDetailPage() {
                             </div>
                           </div>
 
-                          <div className="space-y-4" id="property-details" style={{ display: editingItem?.type === 'IMOVEL' ? 'block' : 'none' }}>
+                          <div className="space-y-4" id="property-details" style={{ display: selectedItemType === 'IMOVEL' ? 'block' : 'none' }}>
                             <h3 className="text-md font-medium text-gray-900 flex items-center"><Home className="h-5 w-5 mr-2" /> Detalhes do Imóvel</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
@@ -998,6 +1081,114 @@ function AuctionDetailPage() {
                                 </div>
                                 <Input id="parkingSpots" name="parkingSpots" type="number" min="0" defaultValue={editingItem?.propertyDetails?.parkingSpots?.toString()} disabled={isLoading} />
                               </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="condition" className="block text-sm font-medium text-gray-700">Condição de Uso Imediato/Funcionando</label>
+                                  {renderCogButton('condition', editingItem ?? undefined)}
+                                </div>
+                                <select id="condition" name="condition" className="w-full border border-gray-300 rounded-md text-gray-700 shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" defaultValue={editingItem?.propertyDetails?.condition || ''} disabled={isLoading}>
+                                  <option value="">Selecione...</option>
+                                  <option value="Sim">Sim</option>
+                                  <option value="Não">Não</option>
+                                  <option value="Parcial">Parcial</option>
+                                  <option value="Necessita Reformas">Necessita Reformas</option>
+                                </select>
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="financing" className="block text-sm font-medium text-gray-700">Apartamento para financiamento</label>
+                                  {renderCogButton('financing', editingItem ?? undefined)}
+                                </div>
+                                <select id="financing" name="financing" className="w-full border border-gray-300 rounded-md text-gray-700 shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" defaultValue={editingItem?.propertyDetails?.financing || ''} disabled={isLoading}>
+                                  <option value="">Selecione...</option>
+                                  <option value="Sim">Sim</option>
+                                  <option value="Não">Não</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label htmlFor="additionalExpensesDescription" className="block text-sm font-medium text-gray-700">Descrição de Despesas Adicionais</label>
+                                {renderCogButton('additionalExpensesDescription', editingItem ?? undefined)}
+                              </div>
+                              <textarea id="additionalExpensesDescription" name="additionalExpensesDescription" rows={3} defaultValue={editingItem?.propertyDetails?.additionalExpensesDescription || ''} placeholder="Ex: Reparos de telhado, pintura externa, etc." className="w-full border border-gray-300 text-gray-700 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500 resize-none" disabled={isLoading} />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="additionalExpensesValue" className="block text-sm font-medium text-gray-700">Valor Despesas Adicionais (R$)</label>
+                                  {renderCogButton('additionalExpensesValue', editingItem ?? undefined)}
+                                </div>
+                                <Input id="additionalExpensesValue" name="additionalExpensesValue" type="number" step="0.01" min="0" defaultValue={editingItem?.propertyDetails?.additionalExpensesValue?.toString()} disabled={isLoading} />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="auctioneeerCommission" className="block text-sm font-medium text-gray-700">Comissão Leiloeiro (R$)</label>
+                                  {renderCogButton('auctioneeerCommission', editingItem ?? undefined)}
+                                </div>
+                                <Input id="auctioneeerCommission" name="auctioneeerCommission" type="number" step="0.01" min="0" defaultValue={editingItem?.propertyDetails?.auctioneeerCommission?.toString()} disabled={isLoading} />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Vehicle Details Section */}
+                          <div style={{ display: selectedItemType === 'VEICULO' ? 'block' : 'none' }}>
+                            <h3 className="text-md font-medium text-gray-900 flex items-center"><Car className="h-5 w-5 mr-2" /> Detalhes do Veículo</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="yearManufacturing" className="block text-sm font-medium text-gray-700">Ano Fabricação</label>
+                                  {renderCogButton('yearManufacturing', editingItem ?? undefined)}
+                                </div>
+                                <Input id="yearManufacturing" name="yearManufacturing" type="number" min="1900" max={new Date().getFullYear().toString()} defaultValue={editingItem?.vehicleDetails?.yearManufacturing?.toString()} disabled={isLoading} />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="yearModel" className="block text-sm font-medium text-gray-700">Ano Modelo</label>
+                                  {renderCogButton('yearModel', editingItem ?? undefined)}
+                                </div>
+                                <Input id="yearModel" name="yearModel" type="number" min="1900" max={(new Date().getFullYear() + 1).toString()} defaultValue={editingItem?.vehicleDetails?.yearModel?.toString()} disabled={isLoading} />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="brand" className="block text-sm font-medium text-gray-700">Marca</label>
+                                  {renderCogButton('brand', editingItem ?? undefined)}
+                                </div>
+                                <Input id="brand" name="brand" type="text" defaultValue={editingItem?.vehicleDetails?.brand || ''} disabled={isLoading} />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="model" className="block text-sm font-medium text-gray-700">Modelo</label>
+                                  {renderCogButton('model', editingItem ?? undefined)}
+                                </div>
+                                <Input id="model" name="model" type="text" defaultValue={editingItem?.vehicleDetails?.model || ''} disabled={isLoading} />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="color" className="block text-sm font-medium text-gray-700">Cor</label>
+                                  {renderCogButton('color', editingItem ?? undefined)}
+                                </div>
+                                <Input id="color" name="color" type="text" defaultValue={editingItem?.vehicleDetails?.color || ''} disabled={isLoading} />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="kilometers" className="block text-sm font-medium text-gray-700">Quilometragem</label>
+                                  {renderCogButton('kilometers', editingItem ?? undefined)}
+                                </div>
+                                <Input id="kilometers" name="kilometers" type="number" step="0.01" min="0" defaultValue={editingItem?.vehicleDetails?.kilometers?.toString()} disabled={isLoading} />
+                              </div>
+                            </div>
+                            <div className="mt-4">
+                              <div className="flex items-center justify-between mb-1">
+                                <label htmlFor="damage" className="block text-sm font-medium text-gray-700">Sinistro</label>
+                                {renderCogButton('damage', editingItem ?? undefined)}
+                              </div>
+                              <select id="damage" name="damage" className="w-full border border-gray-300 rounded-md text-gray-700 shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" defaultValue={editingItem?.vehicleDetails?.damage || ''} disabled={isLoading}>
+                                <option value="">Selecione...</option>
+                                <option value="Sim">Sim</option>
+                                <option value="Não">Não</option>
+                                <option value="Parcial">Parcial</option>
+                              </select>
                             </div>
                           </div>
 

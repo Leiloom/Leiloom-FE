@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 import MainLayout from '@/layouts/MainLayout'
 import { useAuthContext } from '@/contexts/AuthContext'
 import PasswordField from '@/components/shared/PasswordField'
-import { requestChangePassword, changePassword } from '@/services/authService'
+import { requestChangePassword, changePassword, validateCurrentPassword } from '@/services/authService'
 import { updateClientUser } from '@/services/clientService'
 import { getClientUserById } from '@/services/clientUserService'
 import { getUserById, updateUser } from '@/services/userService'
@@ -33,14 +33,16 @@ const backofficeInfoSchema = z.object({
 
 // Schema para mudança de senha
 const passwordSchema = z.object({
-  currentPassword: z.string().min(6, 'Senha atual obrigatória'),
+  currentPassword: z.string()
+    .min(1, 'Senha atual obrigatória'),
   newPassword: z.string()
-    .min(6, 'Nova senha deve ter pelo menos 6 caracteres')
+    .min(8, 'Nova senha deve ter pelo menos 8 caracteres')
     .regex(/[A-Z]/, 'Deve conter uma letra maiúscula')
     .regex(/[a-z]/, 'Deve conter uma letra minúscula')
     .regex(/[0-9]/, 'Deve conter um número')
     .regex(/[^A-Za-z0-9]/, 'Deve conter um caractere especial'),
-  confirmPassword: z.string().min(6, 'Confirme a nova senha'),
+  confirmPassword: z.string()
+    .min(8, 'Confirme a nova senha'),
 }).refine(data => data.newPassword === data.confirmPassword, {
   message: 'As senhas não coincidem',
   path: ['confirmPassword'],
@@ -70,6 +72,7 @@ export default function ProfilePage() {
   const [codeExpiry, setCodeExpiry] = useState<Date | null>(null)
   const [isCodeExpired, setIsCodeExpired] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState<string>('')
+  const [currentPasswordValid, setCurrentPasswordValid] = useState<boolean | null>(null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -210,7 +213,50 @@ export default function ProfilePage() {
   const handleRequestPasswordChange = async () => {
     if (!user) return
 
+    // Validar campos obrigatórios
+    const passwordData = passwordForm.getValues()
+
+    // Verificar se todos os campos estão preenchidos
+    if (!passwordData.currentPassword || !passwordData.currentPassword.trim()) {
+      toast.error('Senha atual é obrigatória')
+      return
+    }
+
+    if (!passwordData.newPassword || !passwordData.newPassword.trim()) {
+      toast.error('Nova senha é obrigatória')
+      return
+    }
+
+    if (!passwordData.confirmPassword || !passwordData.confirmPassword.trim()) {
+      toast.error('Confirmação de senha é obrigatória')
+      return
+    }
+
+    // Validar formulário antes de prosseguir
+    const isValid = await passwordForm.trigger()
+    if (!isValid) {
+      toast.error('Por favor, corrija os erros no formulário antes de continuar')
+      return
+    }
+
+    // Validar que a nova senha é diferente da senha atual
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      toast.error('A nova senha deve ser diferente da senha atual')
+      return
+    }
+
+    // Validar que a senha atual está correta (validação ao clicar)
     setRequestingNewCode(true)
+    try {
+      await validateCurrentPassword(passwordData.currentPassword)
+      setCurrentPasswordValid(true)
+    } catch (error: any) {
+      setCurrentPasswordValid(false)
+      setRequestingNewCode(false)
+      toast.error('Senha atual incorreta. Verifique e tente novamente')
+      return
+    }
+
     try {
       await requestChangePassword(user)
       setCodeRequested(true)
@@ -237,6 +283,12 @@ export default function ProfilePage() {
       return
     }
 
+    // Validar que a nova senha é diferente da senha atual
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      toast.error('A nova senha não pode ser igual à senha atual')
+      return
+    }
+
     setLoadingPassword(true)
     try {
       await changePassword(user, {
@@ -253,7 +305,12 @@ export default function ProfilePage() {
       setCodeExpiry(null)
       setIsCodeExpired(false)
     } catch (error: any) {
-      toast.error(error?.message || 'Erro ao alterar senha')
+      // Verificar se é erro de senha atual incorreta
+      if (error?.response?.status === 401 || error?.message?.includes('senha atual')) {
+        toast.error('Senha atual incorreta')
+      } else {
+        toast.error(error?.message || 'Erro ao alterar senha')
+      }
     } finally {
       setLoadingPassword(false)
     }
@@ -313,6 +370,30 @@ export default function ProfilePage() {
     }
     return role === 'SuperUser' ? 'Administrador' : 'Operador'
   }
+
+  // Validar requisitos de senha
+  const validatePasswordRequirements = (password: string | undefined) => {
+    if (!password) {
+      return {
+        minLength: false,
+        hasUpperCase: false,
+        hasLowerCase: false,
+        hasNumber: false,
+        hasSpecialChar: false,
+      }
+    }
+    return {
+      minLength: password.length >= 8,
+      hasUpperCase: /[A-Z]/.test(password),
+      hasLowerCase: /[a-z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecialChar: /[^A-Za-z0-9]/.test(password),
+    }
+  }
+
+  const newPassword = passwordForm.watch('newPassword')
+  const confirmPassword = passwordForm.watch('confirmPassword')
+  const passwordReqs = validatePasswordRequirements(newPassword)
 
   // Mostra loading enquanto verifica autenticação
   if (isLoading) {
@@ -560,6 +641,45 @@ export default function ProfilePage() {
                           error={passwordForm.formState.errors.newPassword}
                           disabled={loadingPassword || codeRequested}
                         />
+                        
+                        {/* Requisitos de Senha */}
+                        {newPassword && (
+                          <div className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <p className="text-xs font-semibold text-gray-700">Requisitos da senha:</p>
+                            <div className="space-y-1">
+                              <div className={`flex items-center gap-2 text-xs ${passwordReqs.minLength ? 'text-green-600' : 'text-gray-500'}`}>
+                                <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${passwordReqs.minLength ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
+                                  {passwordReqs.minLength && <span className="text-white text-xs">✓</span>}
+                                </span>
+                                Mínimo 8 caracteres
+                              </div>
+                              <div className={`flex items-center gap-2 text-xs ${passwordReqs.hasUpperCase ? 'text-green-600' : 'text-gray-500'}`}>
+                                <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${passwordReqs.hasUpperCase ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
+                                  {passwordReqs.hasUpperCase && <span className="text-white text-xs">✓</span>}
+                                </span>
+                                Uma letra maiúscula (A-Z)
+                              </div>
+                              <div className={`flex items-center gap-2 text-xs ${passwordReqs.hasLowerCase ? 'text-green-600' : 'text-gray-500'}`}>
+                                <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${passwordReqs.hasLowerCase ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
+                                  {passwordReqs.hasLowerCase && <span className="text-white text-xs">✓</span>}
+                                </span>
+                                Uma letra minúscula (a-z)
+                              </div>
+                              <div className={`flex items-center gap-2 text-xs ${passwordReqs.hasNumber ? 'text-green-600' : 'text-gray-500'}`}>
+                                <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${passwordReqs.hasNumber ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
+                                  {passwordReqs.hasNumber && <span className="text-white text-xs">✓</span>}
+                                </span>
+                                Um número (0-9)
+                              </div>
+                              <div className={`flex items-center gap-2 text-xs ${passwordReqs.hasSpecialChar ? 'text-green-600' : 'text-gray-500'}`}>
+                                <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${passwordReqs.hasSpecialChar ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
+                                  {passwordReqs.hasSpecialChar && <span className="text-white text-xs">✓</span>}
+                                </span>
+                                Um caractere especial (!@#$%^&*)
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -569,6 +689,16 @@ export default function ProfilePage() {
                           error={passwordForm.formState.errors.confirmPassword}
                           disabled={loadingPassword || codeRequested}
                         />
+                        {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                          <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                            <span>✗</span> As senhas não coincidem
+                          </p>
+                        )}
+                        {newPassword && confirmPassword && newPassword === confirmPassword && (
+                          <p className="text-green-600 text-xs mt-1 flex items-center gap-1">
+                            <span>✓</span> As senhas coincidem
+                          </p>
+                        )}
                       </div>
 
                       {!codeRequested && (
