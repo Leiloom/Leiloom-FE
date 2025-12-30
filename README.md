@@ -28,7 +28,7 @@ src/
 │   └── globals.css           # Estilos globais com diretivas Tailwind
 ```
 
----
+--- 
 
 ## 🏘️ Layouts e Componentes
 
