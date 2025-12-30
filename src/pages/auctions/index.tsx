@@ -60,19 +60,19 @@ function AuctionsPage({ user }: Props) {
     const [selectedStates, setSelectedStates] = useState<string[]>([])
     const [selectedCities, setSelectedCities] = useState<string[]>([])
     const [hasActivePlan, setHasActivePlan] = useState<boolean | null>(null)
-    
+
     const searchParams = useSearchParams()
-    const itemTypeParam = useMemo(
-        () => searchParams.get('itemType'),
-        [searchParams]
-    ) as ItemType | null
+    const itemTypeParam = useMemo<ItemType | null>(() => {
+        if (!searchParams) return null
+        return searchParams.get('itemType') as ItemType | null
+    }, [searchParams])
 
     const pageTitle =
         itemTypeParam === 'IMOVEL'
             ? 'Leilões de Imóveis'
             : itemTypeParam === 'VEICULO'
-            ? 'Leilões de Veículos'
-            : 'Leilões Disponíveis'
+                ? 'Leilões de Veículos'
+                : 'Leilões Disponíveis'
 
     useEffect(() => {
         validateActivePlan()
@@ -132,7 +132,7 @@ function AuctionsPage({ user }: Props) {
             }
             setHasActivePlan(true)
             loadAuctions()
-            
+
         } catch (error) {
             console.error('Erro ao verificar plano:', error)
             toast.error('Erro ao validar o plano do cliente.')
@@ -169,7 +169,7 @@ function AuctionsPage({ user }: Props) {
 
                 if (itemTypeParam) {
                     filteredItems = filteredItems.filter(
-                    (item) => item.type === itemTypeParam
+                        (item) => item.type === itemTypeParam
                     )
                 }
 
@@ -301,15 +301,15 @@ function AuctionsPage({ user }: Props) {
         const location = getAuctionLocation(auction)
         if (getAuctionItemsCount(auction) === 0) return null
 
-    if (hasActivePlan === null) {
-    return (
-        <MainLayout>
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <p className="text-gray-600">Verificando seu plano...</p>
-            </div>
-        </MainLayout>
-    )
-}
+        if (hasActivePlan === null) {
+            return (
+                <MainLayout>
+                    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                        <p className="text-gray-600">Verificando seu plano...</p>
+                    </div>
+                </MainLayout>
+            )
+        }
 
 
         return (
@@ -604,9 +604,9 @@ function AuctionsPage({ user }: Props) {
                 </div>
             </div>
         </MainLayout>
-        
+
     )
-    
+
 }
 
 export default withClientAuth(AuctionsPage)
