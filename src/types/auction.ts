@@ -22,6 +22,23 @@ export interface PropertyAuction {
   bedrooms?: number
   parkingSpots?: number
   area?: number
+  condition?: string
+  financing?: string
+  additionalExpensesDescription?: string
+  additionalExpensesValue?: number
+  auctioneeerCommission?: number
+}
+
+export interface VehicleAuction {
+  id: string
+  auctionItemId: string
+  yearManufacturing?: number
+  yearModel?: number
+  brand?: string
+  model?: string
+  color?: string
+  kilometers?: number
+  damage?: string
 }
 export interface AuctionImage {
   id: string
@@ -52,6 +69,7 @@ export interface AuctionItem {
   auction?: Auction
   lot?: Lot
   propertyDetails?: PropertyAuction
+  vehicleDetails?: VehicleAuction
 }
 
 export interface Lot {
@@ -103,6 +121,21 @@ export interface PropertyDetailsData {
   bedrooms?: number
   parkingSpots?: number
   area?: number
+  condition?: string
+  financing?: string
+  additionalExpensesDescription?: string
+  additionalExpensesValue?: number
+  auctioneeerCommission?: number
+}
+
+export interface VehicleDetailsData {
+  yearManufacturing?: number
+  yearModel?: number
+  brand?: string
+  model?: string
+  color?: string
+  kilometers?: number
+  damage?: string
 }
 
 export interface CreateAuctionItemData {
@@ -123,6 +156,7 @@ export interface CreateAuctionItemData {
   lng?: number
 
   propertyDetails?: PropertyDetailsData
+  vehicleDetails?: VehicleDetailsData
 
   images?: string[]
 }

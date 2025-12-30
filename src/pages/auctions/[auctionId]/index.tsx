@@ -48,7 +48,6 @@ interface PropertyDetails {
   area?: number
 }
 
-
 interface Lot {
   id: string
   auctionId: string
@@ -180,6 +179,7 @@ function AuctionDetailPage({ user }: Props) {
     )
   }
 
+
   return (
     <MainLayout>
       <Head>
@@ -261,6 +261,7 @@ function AuctionDetailPage({ user }: Props) {
                         {lot.items.length} itens
                       </span>
                     </button>
+                    
 
                     {expandedLots[lot.id] && (
                       <div className="border-t">
@@ -272,6 +273,7 @@ function AuctionDetailPage({ user }: Props) {
                               : 'border-transparent'
                               }`}
                             onClick={() => setSelectedItem(item)}
+                            
                           >
                             <div className="flex items-center gap-2">
                               {getItemTypeIcon(item.type)}
@@ -370,7 +372,10 @@ function AuctionDetailPage({ user }: Props) {
 
                         {selectedItem.type === 'IMOVEL' &&
                           selectedItem.propertyDetails && (
-                            <div className="mt-2 text-sm text-gray-600 flex gap-4">
+                            <div className="mt-2 text-sm text-gray-600 flex gap-4 flex-wrap">
+                              {selectedItem.propertyDetails.type && (
+                                <span>{selectedItem.propertyDetails.type}</span>
+                              )}
                               {selectedItem.propertyDetails.bedrooms && (
                                 <span>{selectedItem.propertyDetails.bedrooms} quartos</span>
                               )}
@@ -382,6 +387,59 @@ function AuctionDetailPage({ user }: Props) {
                               {selectedItem.propertyDetails.area && (
                                 <span>{selectedItem.propertyDetails.area}m²</span>
                               )}
+
+                              {selectedItem.propertyDetails.additionalExpensesDescription && (
+                              <div >
+                                <span>
+                                  Despesas Adicionais: {selectedItem.propertyDetails.additionalExpensesDescription}
+                                </span>
+                              </div>
+                            )}
+                            {selectedItem.propertyDetails.additionalExpensesValue && (
+                              <div>
+                                <span>Valor das Despesas Adicionais: {selectedItem.propertyDetails.additionalExpensesValue}</span>
+                              </div>
+                            )}
+                            {selectedItem.propertyDetails.auctioneeerCommission && (
+                              <div >
+                                <span>Comissão do Leiloeiro: {selectedItem.propertyDetails.auctioneeerCommission}</span>
+                              </div>
+                            )}
+                            {selectedItem.propertyDetails.condition && (
+                              <span>Uso Imediato: {selectedItem.propertyDetails.condition}</span>
+                            )}
+                            {selectedItem.propertyDetails.financing && (
+                              <span>Financiamento: {selectedItem.propertyDetails.financing}</span>
+                            )}
+                          </div>
+                          )}
+
+                        {selectedItem.type === 'VEICULO' &&
+                          selectedItem.vehicleDetails && (
+                            <div>
+                              <div className="mt-2 text-sm text-gray-600 flex gap-4 flex-wrap">
+                                {selectedItem.vehicleDetails.brand && (
+                                  <span>Marca: {selectedItem.vehicleDetails.brand}</span>
+                                )}
+                                {selectedItem.vehicleDetails.model && (
+                                  <span>Modelo:{selectedItem.vehicleDetails.model}</span>
+                                )}
+                                {selectedItem.vehicleDetails.yearManufacturing && (
+                                  <span>Ano Fabricação: {selectedItem.vehicleDetails.yearManufacturing}</span>
+                                )}
+                                {selectedItem.vehicleDetails.yearModel && (
+                                  <span>Ano Modelo: {selectedItem.vehicleDetails.yearModel}</span>
+                                )}
+                                {selectedItem.vehicleDetails.color && (
+                                  <span>Cor: {selectedItem.vehicleDetails.color}</span>
+                                )}
+                                {selectedItem.vehicleDetails.kilometers && (
+                                  <span>Quilometragem: {selectedItem.vehicleDetails.kilometers} km</span>
+                                )}
+                                {selectedItem.vehicleDetails.damage && (
+                                  <span>Sinistro: {selectedItem.vehicleDetails.damage}</span>
+                                )}
+                              </div>
                             </div>
                           )}
 

@@ -236,6 +236,23 @@ export async function changePassword(user: any, payload: {
   }
 }
 
+/**
+ * Valida a senha atual do usuário logado
+ * @param password Senha atual a validar
+ * @returns Objeto com { valid: boolean }
+ * @throws Erro com mensagem formatada do backend
+ */
+export async function validateCurrentPassword(password: string): Promise<{ valid: boolean }> {
+  try {
+    const response = await api.post('/auth/validate-current-password', { password })
+    return response.data
+  } catch (error: any) {
+    return Promise.reject({ 
+      message: 'Senha atual incorreta.' 
+    })
+  }
+}
+
 export interface RequestPasswordResetDto {
   email: string
   context: 'BACKOFFICE' | 'CLIENT'
