@@ -126,7 +126,7 @@ Este projeto segue as melhores práticas de estruturação com Next.js e Tailwin
 Atualizado em: 21/04/2025
 Responsável: Matheus Souza
 
-
+ 
 /radar-leilao-fe
 ├── public/
 ├── src/
