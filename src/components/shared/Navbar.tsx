@@ -56,10 +56,6 @@ export default function Navbar() {
               <HomeIcon className="h-4 w-4" />
               Dashboard
             </Link>
-            <Link href="/auctions" className="flex items-center gap-2 hover:text-yellow-400 transition">
-              <ScaleIcon className="h-4 w-4" />
-              Leilões
-            </Link>
             <Link href="/auctions?itemType=IMOVEL" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <BuildingOfficeIcon className="h-4 w-4" />
               Imovéis
@@ -67,6 +63,10 @@ export default function Navbar() {
             <Link href="/auctions?itemType=VEICULO" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <TruckIcon className="h-4 w-4" />
               Veículos
+            </Link>
+            <Link href="/auctions?itemType=OUTROS" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <ScaleIcon className="h-4 w-4" />
+              Diversos
             </Link>
             <Link href="/users" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <UsersIcon className="h-4 w-4" />
@@ -188,14 +188,6 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <Link
-                  href="/auctions"
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
-                >
-                  <ScaleIcon className="h-5 w-5" />
-                  Leilões
-                </Link>
-                <Link
                   href="/auctions?itemType=IMOVEL"
                   onClick={() => setIsOpen(false)}
                   className="flex items-center gap-2 hover:text-yellow-600 text-base"
@@ -210,6 +202,14 @@ export default function Navbar() {
                 >
                   <TruckIcon className="h-5 w-5" />
                   Veículos
+                </Link>
+                <Link
+                  href="/auctions?itemType=OUTROS"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                >
+                  <ScaleIcon className="h-5 w-5" />
+                  Leilões
                 </Link>
                 <Link
                   href="/users"
