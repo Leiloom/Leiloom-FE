@@ -1,8 +1,7 @@
 import { Id } from 'react-toastify'
 import { api } from './api'
 import { handleAuthError } from './authService' // ✅ IMPORTAR
-import Client from '@/services/Interfaces' 
-import ClientReduced from '@/services/Interfaces' 
+import Client, { ClientReduced } from '@/services/Interfaces' 
 
 /**
  * Cadastra um novo cliente
@@ -190,7 +189,7 @@ export async function excludeClient(id: string) {
  * @param client Dados do cliente a ser criado
  * @returns Dados do cliente criado
  */
-export async function createClient(client: Omit<Client, 'id' | 'status' | 'isConfirmed' | 'createdOn' | 'updatedOn'>) {
+export async function createClient(client: Omit<Client, 'id' | 'createdOn' | 'updatedOn'>) {
   try {
     const response = await api.post('/clients', {
       ...client,
