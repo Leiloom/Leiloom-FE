@@ -18,7 +18,7 @@ import {
     getClientUserById
 } from '@/services/clientUserService'
 import { getDetailedPaymentSummary } from '@/services/paymentService'
-import ClientUser from '@/services/Interfaces'
+import { ClientUser } from '@/services/Interfaces'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
 import { TokenPayload } from '@/utils/jwtUtils'

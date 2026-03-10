@@ -357,10 +357,14 @@ function DashboardClient({ user }: Props) {
                     <p className="text-lg font-bold text-gray-400">--</p>
                   ) : (
                     <>
-                      <p className={`text-lg font-bold ${(dueInfo.days ?? 0) <= 7 ? 'text-red-600' :
-                          (dueInfo.days ?? 0) <= 15 ? 'text-yellow-600' : 'text-gray-900'
+                      <p className={`text-lg font-bold ${(dueInfo.days ?? 0) < 0 ? 'text-red-600' :
+                          (dueInfo.days ?? 0) <= 7 ? 'text-yellow-600' : 'text-gray-900'
                         }`}>
-                        {dueInfo.days} dias
+                        {(dueInfo.days ?? 0) < 0 
+                          ? `Venceu há ${Math.abs(dueInfo.days ?? 0)} ${Math.abs(dueInfo.days ?? 0) === 1 ? 'dia' : 'dias'}` 
+                          : (dueInfo.days ?? 0) === 0 
+                            ? 'Vence hoje' 
+                            : `Falta ${(dueInfo.days ?? 0)} ${(dueInfo.days ?? 0) === 1 ? 'dia' : 'dias'}`}
                       </p>
                       <p className="text-xs text-gray-600 mt-1">
                         {formatDate(dueInfo.date ?? new Date())}
@@ -439,7 +443,11 @@ function DashboardClient({ user }: Props) {
                             )}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Vence em {daysUntilDue} {daysUntilDue === 1 ? 'dia' : 'dias'}
+                            {daysUntilDue < 0 
+                              ? `Venceu há ${Math.abs(daysUntilDue)} ${Math.abs(daysUntilDue) === 1 ? 'dia' : 'dias'}` 
+                              : daysUntilDue === 0 
+                                ? 'Vence hoje' 
+                                : `Falta ${daysUntilDue} ${daysUntilDue === 1 ? 'dia' : 'dias'}`}
                           </p>
                         </div>
                         <div className="text-right">
