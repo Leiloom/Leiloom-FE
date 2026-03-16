@@ -1,4 +1,4 @@
-export default interface ClientUser {
+export interface ClientUser {
   id?: string
   clientId: string
   name: string
@@ -13,7 +13,7 @@ export default interface ClientUser {
   updatedOn?: string
 }
 
-export default interface Client {
+export interface Client {
   id?: string
   name: string
   cpfCnpj: string
@@ -34,7 +34,7 @@ export default interface Client {
   clientUsers?: ClientUser[]
 }
 
-export default interface ClientReduced {
+export interface ClientReduced {
   id?: string
   name: string
   cpfCnpj: string
@@ -54,3 +54,5 @@ export default interface ClientReduced {
   updatedOn?: string
 }
 
+// Aliases para compatibilidade retroativa
+export default Client
