@@ -19,8 +19,7 @@ import {
 } from '@/services/clientUserService'
 import { getClientPaymentSummary } from '@/services/paymentService'
 import type { DetailedPaymentSummary } from '@/services/paymentService'
-import ClientUser from '@/services/Interfaces'
-import Client from '@/services/Interfaces'
+import Client, { ClientUser } from '@/services/Interfaces'
 import { getCountries } from '@/services/countryService'
 import { getCitiesByCountryCode, City } from '@/services/cityService'
 import {
@@ -93,7 +92,7 @@ function ClientEditPage() {
     EXCLUDED: { label: 'Excluído', variant: 'error' },
   }
 
-  const roleMap: Record<Client['role'], { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
+  const roleMap: Record<ClientUser['role'], { label: string; variant: 'success' | 'warning' | 'error' | 'info' }> = {
     ClientOwner: { label: 'Owner', variant: 'warning' },
     ClientAdmin: { label: 'Admin', variant: 'info' },
     ClientFinancial: { label: 'Financeiro', variant: 'success' },
@@ -117,7 +116,7 @@ function ClientEditPage() {
       key: 'role',
       header: 'Função',
       className: 'hidden sm:table-cell',
-      render: (role: Client['role']) => roleMap[role].label
+      render: (role: ClientUser['role']) => roleMap[role].label
     },
     {
       key: 'status',
@@ -361,7 +360,8 @@ function ClientEditPage() {
       await loadAll()
     } catch (error: any) {
       if (error?.response?.status === 409) {
-        toast.error('Este email já está vinculado a um usuário. Escolha outro email.')
+        const msg = error?.response?.data?.message || 'Este email já está vinculado a um usuário. Escolha outro email.'
+        toast.error(typeof msg === 'string' ? msg : 'Erro de conflito (409).')
       } else if (error?.message?.includes('limite') || error?.message?.includes('limit')) {
         toast.error('Limite de usuários do plano atingido!')
       } else {

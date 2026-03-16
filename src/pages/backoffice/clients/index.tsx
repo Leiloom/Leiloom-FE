@@ -65,12 +65,9 @@ import { Button } from '@/components/shared/Button'
 
     const [isOpenModal, setIsOpenModal] = useState(false)
     const [newClient, setNewClient] = useState<Client>({
-    clientId:   '',
-    name:       '',
-    email:      '',
-    phone:      '',
-    role:       'ClientOwner',
     id:              undefined,
+    name:            '',
+    email:           '',
     cpfCnpj:         '',
     cep:             '',
     street:          '',
@@ -144,12 +141,9 @@ import { Button } from '@/components/shared/Button'
 
     function handleNewClient() {
       setNewClient({
-    clientId:   '',
-    name:       '',
-    email:      '',
-    phone:      '',
-    role:       'ClientOwner',
     id:              undefined,
+    name:            '',
+    email:           '',
     cpfCnpj:         '',
     cep:             '',
     street:          '',
@@ -173,7 +167,11 @@ import { Button } from '@/components/shared/Button'
       e.preventDefault()
       setIsLoading(true)
       try {
-        await createClient(newClient)
+        const clientPayload = {
+          ...newClient,
+          status: (newClient.isConfirmed ? 'CONFIRMED' : 'PENDING') as Client['status'],
+        }
+        await createClient(clientPayload)
         toast.success('Cliente criado com sucesso!')
         setIsOpenModal(false)
         loadClients()
@@ -341,10 +339,40 @@ import { Button } from '@/components/shared/Button'
                             required
                             placeholder="12345678900"
                             value={newClient.cpfCnpj}
+                            onChange={(e) => {
+                              let v = e.target.value.replace(/\D/g, '')
+                              if (v.length <= 11) {
+                                v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2')
+                              } else {
+                                v = v.replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d{1,2})/, '$1-$2')
+                              }
+                              setNewClient({
+                                ...newClient,
+                                cpfCnpj: v,
+                              })
+                            }}
+                            disabled={isLoading}
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="email"
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                          >
+                            E-mail
+                          </label>
+                          <Input
+                            id="email"
+                            name="email"
+                            type="email"
+                            required
+                            placeholder="email@empresa.com"
+                            value={newClient.email}
                             onChange={(e) =>
                               setNewClient({
                                 ...newClient,
-                                cpfCnpj: e.target.value,
+                                email: e.target.value,
                               })
                             }
                             disabled={isLoading}
@@ -353,47 +381,7 @@ import { Button } from '@/components/shared/Button'
 
                         {/* --- campos de endereço --- */}
                         <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label
-                              htmlFor="cep"
-                              className="block text-sm font-medium text-gray-700 mb-1"
-                            >
-                              CEP
-                            </label>
-                            <Input
-                              id="cep"
-                              name="cep"
-                              type="text"
-                              placeholder="74343340"
-                              value={newClient.cep}
-                              onChange={(e) =>
-                                setNewClient({ ...newClient, cep: e.target.value })
-                              }
-                              disabled={isLoading}
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="city"
-                              className="block text-sm font-medium text-gray-700 mb-1"
-                            >
-                              Cidade
-                            </label>
-                            <Input
-                              id="city"
-                              name="city"
-                              type="text"
-                              placeholder="Goiânia"
-                              value={newClient.city}
-                              onChange={(e) =>
-                                setNewClient({
-                                  ...newClient,
-                                  city: e.target.value,
-                                })
-                              }
-                              disabled={isLoading}
-                            />
-                          </div>
+                          {/* Linha 1: Rua + Número */}
                           <div>
                             <label
                               htmlFor="street"
@@ -411,28 +399,6 @@ import { Button } from '@/components/shared/Button'
                                 setNewClient({
                                   ...newClient,
                                   street: e.target.value,
-                                })
-                              }
-                              disabled={isLoading}
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="state"
-                              className="block text-sm font-medium text-gray-700 mb-1"
-                            >
-                              Estado
-                            </label>
-                            <Input
-                              id="state"
-                              name="state"
-                              type="text"
-                              placeholder="GO"
-                              value={newClient.state}
-                              onChange={(e) =>
-                                setNewClient({
-                                  ...newClient,
-                                  state: e.target.value,
                                 })
                               }
                               disabled={isLoading}
@@ -460,28 +426,52 @@ import { Button } from '@/components/shared/Button'
                               disabled={isLoading}
                             />
                           </div>
+                          {/* Linha 2: Cidade + Estado */}
                           <div>
                             <label
-                              htmlFor="complement"
+                              htmlFor="city"
                               className="block text-sm font-medium text-gray-700 mb-1"
                             >
-                              Complemento
+                              Cidade
                             </label>
                             <Input
-                              id="complement"
-                              name="complement"
+                              id="city"
+                              name="city"
                               type="text"
-                              placeholder="Sala 05"
-                              value={newClient.complement}
+                              placeholder="Goiânia"
+                              value={newClient.city}
                               onChange={(e) =>
                                 setNewClient({
                                   ...newClient,
-                                  complement: e.target.value,
+                                  city: e.target.value,
                                 })
                               }
                               disabled={isLoading}
                             />
                           </div>
+                          <div>
+                            <label
+                              htmlFor="state"
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              Estado
+                            </label>
+                            <Input
+                              id="state"
+                              name="state"
+                              type="text"
+                              placeholder="GO"
+                              value={newClient.state}
+                              onChange={(e) =>
+                                setNewClient({
+                                  ...newClient,
+                                  state: e.target.value,
+                                })
+                              }
+                              disabled={isLoading}
+                            />
+                          </div>
+                          {/* Linha 3: Bairro + Complemento */}
                           <div>
                             <label
                               htmlFor="neighborhood"
@@ -504,6 +494,52 @@ import { Button } from '@/components/shared/Button'
                               disabled={isLoading}
                             />
                           </div>
+                          <div>
+                            <label
+                              htmlFor="complement"
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              Complemento
+                            </label>
+                            <Input
+                              id="complement"
+                              name="complement"
+                              type="text"
+                              placeholder="Sala 05"
+                              value={newClient.complement}
+                              onChange={(e) =>
+                                setNewClient({
+                                  ...newClient,
+                                  complement: e.target.value,
+                                })
+                              }
+                              disabled={isLoading}
+                            />
+                          </div>
+                          {/* Linha 4: CEP + (vazio) */}
+                          <div>
+                            <label
+                              htmlFor="cep"
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              CEP
+                            </label>
+                            <Input
+                              id="cep"
+                              name="cep"
+                              type="text"
+                              placeholder="74343340"
+                              value={newClient.cep}
+                              onChange={(e) => {
+                                let v = e.target.value.replace(/\D/g, '')
+                                v = v.replace(/(\d{5})(\d)/, '$1-$2').slice(0, 9)
+                                setNewClient({ ...newClient, cep: v })
+                              }}
+                              disabled={isLoading}
+                            />
+                          </div>
+                          <div>{/* espaço reservado */}</div>
+                          {/* País */}
                           <div className="col-span-2">
                             <label
                               htmlFor="country"

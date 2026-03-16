@@ -1,6 +1,6 @@
 import { api } from '@/services/api'
 import { AxiosError } from 'axios'
-import ClientUser from '@/services/Interfaces' 
+import { ClientUser } from '@/services/Interfaces' 
 import { handleAuthError } from './authService' 
 
 /**
