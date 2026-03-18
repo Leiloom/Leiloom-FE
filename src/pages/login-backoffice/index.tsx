@@ -136,6 +136,15 @@ export default function BackOfficeLoginPage() {
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
+
+          <div className="text-center">
+            <a
+              href="/forgot-password-backoffice"
+              className="text-sm text-yellow-600 hover:text-yellow-700 transition"
+            >
+              Esqueci minha senha
+            </a>
+          </div>
         </div>
       </div>
     </MainLayout>
