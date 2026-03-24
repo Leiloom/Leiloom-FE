@@ -60,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function logout(context: 'CLIENT' | 'BACKOFFICE') {
     localStorage.removeItem('clientToken')
     localStorage.removeItem('backofficeToken')
+    sessionStorage.removeItem('selectedAuctionItemId')
     setUser(null)
   }
 
