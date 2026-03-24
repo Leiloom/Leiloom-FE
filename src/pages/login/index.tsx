@@ -16,7 +16,7 @@ const schema = z.object({
   login: z.string().min(3, 'Informe CPF, CNPJ ou email'),
   password: z.string().min(6, 'Senha obrigatória'),
   cnpj: z.string().optional(),
-})
+});
 
 type FormData = z.infer<typeof schema>
 
@@ -89,9 +89,11 @@ export default function LoginPage() {
         setIsAdmin(false);
         setValue('cnpj', '');
         setValue('login', ''); // Limpa o campo login ao trocar para PF
+        setValue('password', ''); // Limpa a senha ao trocar de tipo
       } else {
         // Ao trocar para PJ, limpa o campo login
         setValue('login', '');
+        setValue('password', ''); // Limpa a senha ao trocar de tipo
       }
       
       setTimeout(() => {
