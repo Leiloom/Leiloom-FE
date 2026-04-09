@@ -147,6 +147,8 @@ function AuctionDetailPage() {
   // --- CONFIGURAÇÕES DE SCRAPING ---
   const [scrapingConfigs, setScrapingConfigs] = useState<any[]>([])
   const [pendingItemTags, setPendingItemTags] = useState<Record<string, string>>({})
+  const [defaultLotTags, setDefaultLotTags] = useState<Record<string, Record<string, string>>>({}) // Armazena tags default por lote
+  const [initialPendingTags, setInitialPendingTags] = useState<Record<string, string>>({}) // Para rastrear alterações
 
   // --- ESTADO DO MODAL DE TAG ---
   const { 
@@ -164,11 +166,18 @@ function AuctionDetailPage() {
   const [selectedLotId, setSelectedLotId] = useState<string>('')
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false)
   const [selectedItemType, setSelectedItemType] = useState<string>('')
+  
+  // --- MODAL DE SELEÇÃO DE ITEM PARA COPIAR TAGS ---
+  const [isCopyTagsModalOpen, setIsCopyTagsModalOpen] = useState(false)
+  const [itemsForTagCopy, setItemsForTagCopy] = useState<AuctionItem[]>([])
+  const [selectedItemForTagCopy, setSelectedItemForTagCopy] = useState<string | null>(null)
+  const [isTagCopyMode, setIsTagCopyMode] = useState(false) // true = copiando de item, false = criar sem copiar
 
   const [states, setStates] = useState<{ id: number; sigla: string; nome: string }[]>([])
   const [cities, setCities] = useState<{ id: number; nome: string }[]>([])
   const [selectedState, setSelectedState] = useState(editingItem?.state || '')
   const [selectedCity, setSelectedCity] = useState(editingItem?.city || '')
+
 
   // --- EFEITOS (Data Fetching) ---
   useEffect(() => {
@@ -450,14 +459,103 @@ function AuctionDetailPage() {
   }
 
   // --- HANDLERS DE ITENS ---
-  const handleAddItem = (lotId: string) => {
-    setSelectedLotId(lotId)
-    setEditingItem(null)
-    setSelectedItemType('')
-    setPendingItemTags({}) // Resetar tags pendentes
-    setItemAction('create')
+const handleAddItem = (lotId: string) => {
+  setSelectedLotId(lotId)
+  setEditingItem(null)
+  setSelectedItemType('')
+  setPendingItemTags({})
+  setItemAction('create')
+  
+  // Buscar itens disponíveis do lote para copiar tags
+  const lot = lots.find(l => l.id === lotId)
+  const availableItems = (lot?.items || []).filter(item => item.status === 'AVAILABLE')
+  
+  // Se existe item disponível, abrir modal para seleção
+  if (availableItems.length > 0) {
+    setItemsForTagCopy(availableItems)
+    setSelectedItemForTagCopy(null)
+    setIsCopyTagsModalOpen(true)
+  } else {
+    // Se não existe item disponível, carregar tags default do banco (com itemId = null)
+    const defaultTags: Record<string, string> = {}
+    scrapingConfigs.forEach(config => {
+      if (config.itemId === null) {
+        // Encontra a chave correspondente para este fieldType
+        const fieldKey = Object.entries(ITEM_FIELD_ENUM_MAP).find(
+          ([_, enumValue]) => enumValue === config.fieldType
+        )?.[0]
+        
+        if (fieldKey) {
+          defaultTags[fieldKey] = config.selector
+        }
+      }
+    })
+    
+    setPendingItemTags(defaultTags)
     setIsItemModalOpen(true)
   }
+}
+
+const handleCopyTagsFromItem = (itemId: string | null) => {
+  if (!itemId) {
+    // --- MODO: CRIAR SEM COPIAR (usar tags default) ---
+    setIsCopyTagsModalOpen(false)
+    setIsTagCopyMode(false) // Marca que NÃO está em modo cópia
+    closeTagModal() // Limpar contexto anterior
+    
+    // Carrega tags default do banco (com itemId = null)
+    const defaultTags: Record<string, string> = {}
+    scrapingConfigs.forEach(config => {
+      if (config.itemId === null) {
+        const fieldKey = Object.entries(ITEM_FIELD_ENUM_MAP).find(
+          ([_, enumValue]) => enumValue === config.fieldType
+        )?.[0]
+        if (fieldKey) {
+          defaultTags[fieldKey] = config.selector
+        }
+      }
+    })
+    
+    setPendingItemTags(defaultTags)
+    setInitialPendingTags(defaultTags)
+    
+    if (Object.keys(defaultTags).length > 0) {
+      toast.info('Usando tags padrão definidas anteriormente.')
+    } else {
+      toast.info('Criando novo item com tags em branco.')
+    }
+    
+    setIsItemModalOpen(true)
+    return
+  }
+
+  // --- MODO: COPIAR DE ITEM X ---
+  setIsTagCopyMode(true) // Marca que ESTÁ em modo cópia
+  setIsCopyTagsModalOpen(false)
+
+  // Buscar as configs do item selecionado
+  const selectedConfigs = scrapingConfigs.filter(c => c.itemId === itemId)
+  
+  // Copiar as tags para o novo item (sem itemId)
+  const newTags: Record<string, string> = {}
+  selectedConfigs.forEach(config => {
+    // Encontrar a chave do campo a partir do enum
+    for (const [key, enumVal] of Object.entries(ITEM_FIELD_ENUM_MAP)) {
+      if (enumVal === config.fieldType) {
+        newTags[key] = config.selector
+        break
+      }
+    }
+  })
+  
+  setPendingItemTags(newTags)
+  setInitialPendingTags(newTags)
+  const selectedItem = itemsForTagCopy.find(i => i.id === itemId)
+  toast.success(`Tags de "${selectedItem?.title}" copiadas para o novo item!`)
+  
+  setIsCopyTagsModalOpen(false)
+  setIsItemModalOpen(true)
+}
 
   const handleEditItem = (item: AuctionItem) => {
     setSelectedLotId(item.lotId)
@@ -466,80 +564,125 @@ function AuctionDetailPage() {
     )
     setEditingItem({ ...item, images: normalizedImages })
     setSelectedItemType(item.type)
+    setPendingItemTags({})
+    setIsTagCopyMode(false) // Garantir que não está em modo cópia ao editar
     setItemAction('edit')
     setIsItemModalOpen(true)
   }
 
   // --- TAG MODAL HANDLERS ---
   const handleOpenTagModal = (field: string, item?: AuctionItem) => {
-    const itemId = item?.id ?? editingItem?.id ?? ''
-    openTagModalHook(field, itemId)
+    if (itemAction === 'edit') {
+      // Modo edição: passa o itemId do item sendo editado
+      const itemId = item?.id ?? editingItem?.id ?? ''
+      openTagModalHook(field, itemId)
+    } else if (isTagCopyMode) {
+      // Modo cópia: passa o itemId do item sendo copiado
+      const itemId = selectedItemForTagCopy ?? ''
+      openTagModalHook(field, itemId)
+    } else {
+      // Modo criar sem copiar: passa string vazia para indicar default (itemId = null no banco)
+      openTagModalHook(field, '')
+    }
   }
 
   const handleSaveTag = async (tagValue: string) => {
-    if (!selectedTagField) return
+    if (!selectedTagField || !auctionId) return
 
-    // Verifica se estamos editando um item existente (tem ID) ou criando um novo
-    if (selectedTagItemId) {
-      // --- MODO EDIÇÃO (Item já existe no banco) ---
-      if (!auctionId) return
-      setIsLoading(true)
-      try {
-        if (!tagValue || tagValue.trim() === '') {
-            // DELETAR: Busca a config correspondente na lista carregada
-            const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
-            const configToDelete = scrapingConfigs.find(c => c.itemId === selectedTagItemId && c.fieldType === enumType)
-            
-            if (configToDelete) {
-                await deleteScrapingConfig(configToDelete.id)
-                toast.info(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" removida.`)
-            }
-        } else {
-            // SALVAR
-            await saveScrapingConfig({
-                auctionId,
-                itemId: selectedTagItemId,
-                fieldName: selectedTagField,
-                selector: tagValue
-            })
-            toast.success(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" salva com sucesso!`)
-        }
-        await fetchScrapingConfigs()
-      } catch (error) {
-        toast.error('Erro ao processar configuração.')
-      } finally {
-        setIsLoading(false)
-        closeTagModal()
-      }
-    } else {
-      // --- MODO CRIAÇÃO (Item novo, ainda não salvo) ---
+    setIsLoading(true)
+    try {
+      const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
+      
       if (!tagValue || tagValue.trim() === '') {
-          // Se vazio, remove do objeto de tags pendentes
-          setPendingItemTags(prev => {
-              const newState = { ...prev }
-              delete newState[selectedTagField]
-              return newState
-          })
+        // --- DELETAR TAG ---
+        const configToDelete = scrapingConfigs.find(c => 
+          c.itemId === (selectedTagItemId || null) && c.fieldType === enumType
+        )
+        
+        if (configToDelete) {
+          await deleteScrapingConfig(configToDelete.id)
+          toast.info(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" removida.`)
+        }
+        
+        // Remove de pendingItemTags
+        setPendingItemTags(prev => {
+          const newState = { ...prev }
+          delete newState[selectedTagField]
+          return newState
+        })
       } else {
-          // Se tem valor, atualiza o estado
-          setPendingItemTags(prev => ({ ...prev, [selectedTagField]: tagValue }))
+        // --- SALVAR TAG ---
+        // Determina com qual itemId salvar (string vazia vira null no banco)
+        const saveItemId = selectedTagItemId || null
+        
+        // Salva no banco
+        await saveScrapingConfig({
+          auctionId,
+          itemId: saveItemId === null ? undefined : saveItemId,
+          fieldName: selectedTagField,
+          selector: tagValue
+        })
+        
+        // Atualiza pendingItemTags localmente
+        setPendingItemTags(prev => ({
+          ...prev,
+          [selectedTagField]: tagValue
+        }))
+        
+        // Mensagens diferenciadas
+        if (itemAction === 'create' && !isTagCopyMode && !selectedTagItemId) {
+          toast.success(`Tag padrão para "${ITEM_FIELD_LABELS[selectedTagField]}" salva!`)
+        } else {
+          toast.success(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" salva com sucesso!`)
+        }
       }
+
+      // Atualiza a lista de configs
+      await fetchScrapingConfigs()
+    } catch (error) {
+      toast.error('Erro ao processar configuração.')
+      console.error('Erro ao salvar tag:', error)
+    } finally {
+      setIsLoading(false)
       closeTagModal()
     }
   }
 
   const getCurrentSelector = () => {
-      if (!selectedTagField) return ''
+    if (!selectedTagField) return ''
 
-      
-      if (selectedTagItemId) {
-          const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
-          const config = scrapingConfigs.find(c => c.itemId === selectedTagItemId && c.fieldType === enumType)
-          return config ? config.selector : ''
-      } 
-      
-      
-      return pendingItemTags[selectedTagField] || ''
+    // Primeiro, verifica se a tag está em pendingItemTags (tags copiadas ou alteradas localmente)
+    if (pendingItemTags[selectedTagField]) {
+      return pendingItemTags[selectedTagField]
+    }
+
+    const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
+    
+    // Se está editando um item existente, busca do banco para aquele item
+    if (itemAction === 'edit') {
+      const config = scrapingConfigs.find(c => 
+        c.itemId === (selectedTagItemId || editingItem?.id) && c.fieldType === enumType
+      )
+      return config ? config.selector : ''
+    }
+
+    // Se está em modo cópia (criando a partir de outro item), busca apenas daquele item
+    if (isTagCopyMode && selectedTagItemId) {
+      const config = scrapingConfigs.find(c => 
+        c.itemId === selectedTagItemId && c.fieldType === enumType
+      )
+      return config ? config.selector : ''
+    }
+
+    // Se está em modo "Criar Sem Copiar", busca as tags default (itemId = null)
+    if (!isTagCopyMode && !selectedTagItemId) {
+      const config = scrapingConfigs.find(c => 
+        c.itemId === null && c.fieldType === enumType
+      )
+      return config ? config.selector : ''
+    }
+
+    return ''
   }
 
   const handleSaveItem = async (formData: FormData) => {
@@ -623,21 +766,39 @@ function AuctionDetailPage() {
         const createdItem = await createAuctionItem(itemData)
         targetItemId = createdItem?.id
         toast.success('Item criado com sucesso!')
+        
+        // Salvar automaticamente as tags pendentes para o novo item
+        if (targetItemId && Object.keys(pendingItemTags).length > 0) {
+          try {
+            for (const [fieldName, selector] of Object.entries(pendingItemTags)) {
+              const enumType = ITEM_FIELD_ENUM_MAP[fieldName]
+              await saveScrapingConfig({
+                auctionId: auctionId!,
+                itemId: targetItemId,
+                fieldName: fieldName,
+                selector: selector
+              })
+            }
+            toast.info('Tags do item copiadas e salvas com sucesso!')
+          } catch (error) {
+            console.error('Erro ao salvar tags do novo item:', error)
+            toast.error('Erro ao salvar tags do novo item')
+          }
+        }
+        
+        // Salvar as tags pendentes como default para o lote
+        if (Object.keys(pendingItemTags).length > 0) {
+          setDefaultLotTags(prev => ({
+            ...prev,
+            [selectedLotId]: pendingItemTags
+          }))
+        }
       }
 
-      // Salva tags pendentes
-      if (targetItemId && auctionId && Object.keys(pendingItemTags).length > 0) {
-        await Promise.all(
-          Object.entries(pendingItemTags).map(([fieldName, selector]) => 
-            saveScrapingConfig({
-              auctionId: auctionId!,
-              itemId: targetItemId!,
-              fieldName: fieldName,
-              selector: selector
-            })
-          )
-        )
-      }
+      // Limpa as tags pendentes após criar o item
+      // As tags já foram salvas imediatamente quando definidas
+      setPendingItemTags({})
+      setIsTagCopyMode(false) // Limpar modo de cópia
 
       setIsItemModalOpen(false)
       await fetchData()
@@ -648,6 +809,32 @@ function AuctionDetailPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleCancelItemModal = () => {
+    // Verificar se as tags foram alteradas em relação às iniciais
+    const tagsChanged = JSON.stringify(pendingItemTags) !== JSON.stringify(initialPendingTags)
+    
+    if (tagsChanged && Object.keys(pendingItemTags).length > 0 && itemAction === 'create' && !isTagCopyMode) {
+      // Oferecer salvar como default (apenas em modo "Criar Sem Copiar")
+      const saveAsDefault = confirm(
+        'Você alterou as tags. Deseja salvá-las como padrão para os próximos itens deste lote?'
+      )
+      
+      if (saveAsDefault) {
+        setDefaultLotTags(prev => ({
+          ...prev,
+          [selectedLotId]: pendingItemTags
+        }))
+        toast.info('Tags salvas como padrão para este lote.')
+      }
+    }
+    
+    setPendingItemTags({})
+    setInitialPendingTags({})
+    setIsTagCopyMode(false) // Limpar modo de cópia
+    setIsItemModalOpen(false)
+    closeTagModal()
   }
 
   const handleDeleteItem = async (itemId: string) => {
@@ -691,14 +878,30 @@ function AuctionDetailPage() {
   
   // --- HELPERS VISUAIS (Ícones de Config) ---
   const renderStatusIcon = (fieldName: string, item?: AuctionItem) => {
-    if (!item || !item.id) {
-        return <XIcon className="h-3 w-3 text-red-500 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
-    }
     const enumType = ITEM_FIELD_ENUM_MAP[fieldName]
-    const isConfigured = scrapingConfigs.some(c => c.itemId === item.id && c.fieldType === enumType)
     
-    if (isConfigured) {
+    // Se está em modo criação (sem item.id)
+    if (!item || !item.id) {
+      // Primeiro: Verifica se a tag existe em pendingItemTags e não está vazia
+      if (pendingItemTags[fieldName] && pendingItemTags[fieldName].trim().length > 0) {
         return <Check className="h-3 w-3 text-blue-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+      }
+      
+      // Segundo: Se está em modo "Criar Sem Copiar", verifica se existe tag default no banco
+      if (!isTagCopyMode && !selectedTagItemId) {
+        const defaultConfig = scrapingConfigs.find(c => c.itemId === null && c.fieldType === enumType)
+        if (defaultConfig) {
+          return <Check className="h-3 w-3 text-blue-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+        }
+      }
+      
+      return <XIcon className="h-3 w-3 text-red-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+    }
+    
+    // Se tem item com ID (editando item existente), verifica se a config existe para esse item específico
+    const isConfigured = scrapingConfigs.some(c => c.itemId === item.id && c.fieldType === enumType)
+    if (isConfigured) {
+      return <Check className="h-3 w-3 text-blue-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
     }
     return <XIcon className="h-3 w-3 text-red-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
   }
@@ -1233,7 +1436,7 @@ function AuctionDetailPage() {
                             </div>
 
                             <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
-                              <Button type="button" onClick={() => setIsItemModalOpen(false)} variant="neutral" disabled={isLoading}>Cancelar</Button>
+                              <Button type="button" onClick={handleCancelItemModal} variant="neutral" disabled={isLoading}>Cancelar</Button>
                               <Button type="submit" variant={itemAction === 'create' ? 'add' : 'primary'} disabled={isLoading}>{itemAction === 'create' ? 'Adicionar Item' : 'Atualizar Item'}</Button>
                             </div>
                           </div>
@@ -1254,6 +1457,83 @@ function AuctionDetailPage() {
             isLoading={isLoading}
             initialValue={getCurrentSelector()}
           />
+
+          {/* Modal de Seleção de Item para Copiar Tags */}
+          <Transition appear show={isCopyTagsModalOpen} as={Fragment}>
+            <Dialog as="div" className="relative z-50" onClose={() => setIsCopyTagsModalOpen(false)}>
+              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+                <div className="fixed inset-0 bg-black bg-opacity-25" />
+              </Transition.Child>
+
+              <div className="fixed inset-0 overflow-y-auto">
+                <div className="flex min-h-full items-center justify-center p-4 text-center">
+                  <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+                    <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all">
+                      <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
+                        Copiar Tags de Qual Item?
+                      </Dialog.Title>
+
+                      {itemsForTagCopy.length === 0 ? (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                          <p className="text-sm text-yellow-800">
+                            ⚠️ Nenhum item disponível para copiar tags. Apenas itens com status "Disponível" podem servir como referência.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-600 mb-4">
+                            Selecione um item do lote para copiar suas configurações de tags para o novo item:
+                          </p>
+
+                          <div className="space-y-2 mb-6">
+                            {itemsForTagCopy.map((item) => (
+                              <label key={item.id} className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                                <input
+                                  type="radio"
+                                  name="item-copy"
+                                  value={item.id}
+                                  checked={selectedItemForTagCopy === item.id}
+                                  onChange={(e) => setSelectedItemForTagCopy(e.target.value)}
+                                  className="mr-3 cursor-pointer"
+                                />
+                                <div>
+                                  <p className="font-medium text-gray-900">{item.title}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {item.type === 'IMOVEL' ? '🏠 Imóvel' : item.type === 'VEICULO' ? '🚗 Veículo' : '📦 Outro'}
+                                    {item.city && ` • ${item.city} - ${item.state}`}
+                                  </p>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      <div className="flex gap-3 justify-end">
+                        <Button
+                          variant="neutral"
+                          onClick={() => {
+                            setIsCopyTagsModalOpen(false)
+                            setIsItemModalOpen(true)
+                          }}
+                          disabled={isLoading}
+                        >
+                          Criar Sem Copiar
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={() => handleCopyTagsFromItem(selectedItemForTagCopy)}
+                          disabled={isLoading || !selectedItemForTagCopy || itemsForTagCopy.length === 0}
+                        >
+                          Copiar e Continuar
+                        </Button>
+                      </div>
+                    </Dialog.Panel>
+                  </Transition.Child>
+                </div>
+              </div>
+            </Dialog>
+          </Transition>
 
         </div>
       </div>

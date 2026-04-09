@@ -4,7 +4,12 @@ import { CreateScrapingConfigDto, ScrapingConfigResponse } from '@/types/scrapin
 export async function saveScrapingConfig(
   data: CreateScrapingConfigDto
 ): Promise<ScrapingConfigResponse> {
-  const response = await api.post('/scraping-configs', data)
+  // Garante que itemId undefined vire null para o backend
+  const payload = {
+    ...data,
+    itemId: data.itemId || null
+  }
+  const response = await api.post('/scraping-configs', payload)
   return response.data
 }
 
