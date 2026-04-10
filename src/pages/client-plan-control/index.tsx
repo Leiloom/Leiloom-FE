@@ -406,7 +406,12 @@ function ClientPlanControlPage({ user }: Props) {
         paymentMethod: 'PIX' // Valor padrão, o MP vai permitir escolher
       })
 
-      if (subscriptionData.payment?.id) {
+      // Bypass Mercado Pago para planos gratuitos ou trials
+      if (selectedPlan.isTrial || selectedPlan.price === 0) {
+        toast.success('Plano ativado com sucesso!')
+        setIsUpgradeModalOpen(false)
+        await loadData()
+      } else if (subscriptionData.payment?.id) {
         setCreatedPaymentId(subscriptionData.payment.id)
 
         // Ir direto para pagamento

@@ -240,14 +240,16 @@ function ClientPaymentsPage({ user }: Props) {
           />
           {(item.status === 'PENDING' || item.status === 'OVERDUE') && (
             <>
-              <button
-                onClick={() => handlePayPayment(item)}
-                disabled={isLoading}
-                className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition disabled:opacity-50"
-                title="Pagar agora"
-              >
-                Pagar
-              </button>
+              {item.totalAmount > 0 && (
+                <button
+                  onClick={() => handlePayPayment(item)}
+                  disabled={isLoading}
+                  className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition disabled:opacity-50"
+                  title="Pagar agora"
+                >
+                  Pagar
+                </button>
+              )}
               <button
                 onClick={() => handleCancelPayment(item)}
                 disabled={isLoading}
