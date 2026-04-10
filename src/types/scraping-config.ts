@@ -42,6 +42,7 @@ export enum ScrapingFieldType {
 
 export interface CreateScrapingConfigDto {
   auctionId: string
+  lotId?: string | null
   itemId?: string | null
   fieldName: string
   selector: string
@@ -50,9 +51,11 @@ export interface CreateScrapingConfigDto {
 export interface ScrapingConfigResponse {
   id: string
   auctionId: string
+  lotId: string | null
   itemId: string | null
   fieldType: ScrapingFieldType
   selector: string
+  source?: 'LOT' | 'ITEM'
   createdOn: Date
   updatedOn: Date
   item?: {
