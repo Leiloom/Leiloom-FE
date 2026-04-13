@@ -80,6 +80,7 @@ function AuctionsAdminPage() {
   ]
 
   function handleNewAuction() {
+
     setNewAuction({ name: '', type: AuctionType.ONLINE, url: '', openingDate: '', closingDate: '', createdBy: 'system' })
     setPendingTags({})
     setIsOpenModal(true)
@@ -109,6 +110,8 @@ function AuctionsAdminPage() {
         await Promise.all(Object.entries(pendingTags).map(([fieldName, selector]) => saveScrapingConfig({ auctionId: createdAuction.id, fieldName, selector, itemId: null })))
       }
       toast.success('Leilão criado com sucesso!')
+      setPendingTags({}) // Limpar tags após salvar
+
       setIsOpenModal(false)
       loadAuctions()
     } catch (error) { console.error(error); toast.error('Erro ao salvar leilão.') } finally { setIsLoading(false) }
@@ -116,21 +119,32 @@ function AuctionsAdminPage() {
 
   const handleSaveTag = (tagValue: string) => {
     if (!selectedTagField) return
+    
     if (!tagValue || tagValue.trim() === '') {
-        setPendingTags(prev => { const newState = { ...prev }; delete newState[selectedTagField]; return newState })
+      // Remover tag
+      setPendingTags(prev => {
+        const newState = { ...prev }
+        delete newState[selectedTagField]
+        return newState
+      })
+      toast.info(`Tag para "${AUCTION_FIELD_LABELS[selectedTagField]}" removida.`)
     } else {
-        setPendingTags(prev => ({ ...prev, [selectedTagField]: tagValue }))
-        toast.success(`Tag para "${AUCTION_FIELD_LABELS[selectedTagField]}" salva com sucesso!`)
+      // Salvar tag localmente
+      setPendingTags(prev => ({ ...prev, [selectedTagField]: tagValue }))
+      toast.success(`Tag para "${AUCTION_FIELD_LABELS[selectedTagField]}" salva com sucesso!`)
     }
     closeTagModal()
   }
 
-  const getCurrentSelector = () => (selectedTagField ? pendingTags[selectedTagField] || '' : '')
+  const getCurrentSelector = () => {
+    if (!selectedTagField) return ''
+    return pendingTags[selectedTagField] || ''
+  }
 
   const renderStatusIcon = (fieldName: string) => {
-      const isConfigured = !!pendingTags[fieldName]
-      if (isConfigured) return <Check className="h-3 w-3 text-green-600 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
-      return <XIcon className="h-3 w-3 text-red-500 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+    const isConfigured = !!pendingTags[fieldName]
+    if (isConfigured) return <Check className="h-3 w-3 text-blue-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+    return <XIcon className="h-3 w-3 text-red-500 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
   }
 
   const renderCogButton = (fieldName: string) => (

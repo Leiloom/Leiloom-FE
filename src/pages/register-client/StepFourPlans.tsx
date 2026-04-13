@@ -82,8 +82,10 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
       toast.error('Selecione um plano para continuar.')
       return
     }
-    if (selectedPlan.isTrial) {
-      await handleTrialFinish()
+    
+    // Planos Trial ou Gratuitos (preço 0) não precisam de checkout no Mercado Pago
+    if (selectedPlan.isTrial || selectedPlan.price === 0) {
+      await handleFreeOrTrialFinish()
     } else {
       if (onNext && typeof onNext === 'function') {
         const currentTerms = await getCurrentTerms()
@@ -108,7 +110,7 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
   }
 
 
-  async function handleTrialFinish() {
+  async function handleFreeOrTrialFinish() {
     if (!selectedPlan || !formData.clientId) return
 
     setLoading(true)
@@ -130,11 +132,11 @@ export default function StepFourPlans({ onBack, onNext }: StepFourPlansProps) {
         paymentMethod: 'PIX'
       })
 
-      router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'trial-created'}`)
+      router.push(`/dashboard-client?newSubscription=${subscriptionData.payment?.id || 'free-plan-created'}`)
 
     } catch (err: any) {
       console.error('Erro:', err)
-      toast.error(err?.message || 'Erro ao ativar plano trial.')
+      toast.error(err?.message || 'Erro ao ativar plano.')
     } finally {
       setLoading(false)
     }

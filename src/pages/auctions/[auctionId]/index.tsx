@@ -91,6 +91,21 @@ function AuctionDetailPage({ user }: Props) {
       const expanded: { [key: string]: boolean } = {}
       auctionData.lots?.forEach((lot: any) => (expanded[lot.id] = true))
 
+      let itemToSelect: AuctionItem | null = null;
+      const savedItemId = sessionStorage.getItem('selectedAuctionItemId');
+      
+      if (savedItemId) {
+        for (const lot of auctionData.lots || []) {
+          const found = lot.items?.find((i: any) => i.id === savedItemId);
+          if (found) {
+            itemToSelect = found;
+            expanded[lot.id] = true;
+            break;
+          }
+        }
+        sessionStorage.removeItem('selectedAuctionItemId');
+      }
+
       setAuction({
         ...auctionData,
         lots: (auctionData.lots ?? []).map((lot: any) => ({
@@ -101,6 +116,9 @@ function AuctionDetailPage({ user }: Props) {
 
 
       setExpandedLots(expanded)
+      if (itemToSelect) {
+        setSelectedItem(itemToSelect)
+      }
     } catch (err) {
       console.error('Erro ao carregar detalhes do leilão:', err)
       toast.error('Erro ao carregar detalhes do leilão')
@@ -193,7 +211,7 @@ function AuctionDetailPage({ user }: Props) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center gap-4 mb-4">
               <button
-                onClick={() => router.push('/auctions')}
+                onClick={() => router.back()}
                 className="p-2 hover:bg-gray-100 rounded-lg transition"
               >
                 <ArrowLeft className="h-5 w-5 text-gray-600" />

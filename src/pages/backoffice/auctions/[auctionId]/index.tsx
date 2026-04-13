@@ -5,7 +5,7 @@ import { toast } from 'react-toastify'
 import { getAuctionById, updateAuction, deleteAuction } from '@/services/auctionService'
 import { getLotsByAuction, createLot, updateLot, deleteLot } from '@/services/lotService'
 import { createAuctionItem, updateAuctionItem, deleteAuctionItem } from '@/services/auctionItemService'
-import { saveScrapingConfig, getAllScrapingConfigs, deleteScrapingConfig } from '@/services/scrapingConfigService'
+import { saveScrapingConfig, getAllScrapingConfigs, deleteScrapingConfig, copyTagsBetweenLots } from '@/services/scrapingConfigService'
 import { Button } from '@/components/shared/Button'
 import { Input } from '@/components/shared/Input'
 import { useRouter, useParams } from 'next/navigation'
@@ -13,6 +13,8 @@ import MainLayout from '@/layouts/MainLayout'
 import { withBackofficeAuth } from '@/hooks/withBackofficeAuth'
 import { PageHeader } from '@/components/shared/PageHeader'
 import AuctionEditModal from '../../../../components/backoffice/auctions/AuctionEditModal'
+import LotEditModal from '../../../../components/backoffice/auctions/LotEditModal'
+import CopyLotTagsModal from '../../../../components/backoffice/auctions/CopyLotTagsModal'
 import { ConfirmationModal } from '@/components/shared/ConfirmationModal'
 import { Dialog, Transition } from '@headlessui/react'
 import { useTagModal } from '../../../../hooks/useTagModel'
@@ -36,7 +38,7 @@ import {
   X as XIcon
 } from 'lucide-react'
 
-import { AuctionItem, AuctionType } from '@/types/auction'
+import { AuctionItem, AuctionType, Auction, Lot } from '@/types/auction'
 
 // --- CONSTANTES E TYPES ---
 
@@ -102,31 +104,6 @@ const ITEM_FIELD_ENUM_MAP: Record<string, string> = {
   damage: 'VEHICLE_DAMAGE',
 }
 
-interface Lot {
-  id: string
-  auctionId: string
-  identification: string
-  createdOn: string
-  updatedOn: string
-  items?: AuctionItem[]
-}
-
-interface Auction {
-  id: string
-  name: string
-  type: 'ONLINE' | 'LOCAL'
-  url?: string
-  openingDate: string
-  closingDate: string
-  isActive: boolean
-  createdBy: string
-  createdOn: string
-  updatedBy?: string
-  updatedOn?: string
-  lots?: Lot[]
-  items?: AuctionItem[]
-}
-
 function AuctionDetailPage() {
   const params = useParams<{ auctionId: string }>()
   const router = useRouter()
@@ -147,6 +124,8 @@ function AuctionDetailPage() {
   // --- CONFIGURAÇÕES DE SCRAPING ---
   const [scrapingConfigs, setScrapingConfigs] = useState<any[]>([])
   const [pendingItemTags, setPendingItemTags] = useState<Record<string, string>>({})
+  const [defaultLotTags, setDefaultLotTags] = useState<Record<string, Record<string, string>>>({}) // Armazena tags default por lote
+  const [initialPendingTags, setInitialPendingTags] = useState<Record<string, string>>({}) // Para rastrear alterações
 
   // --- ESTADO DO MODAL DE TAG ---
   const { 
@@ -164,11 +143,16 @@ function AuctionDetailPage() {
   const [selectedLotId, setSelectedLotId] = useState<string>('')
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false)
   const [selectedItemType, setSelectedItemType] = useState<string>('')
+  
+  // --- MODAL DE SELEÇÃO DE LOTE PARA COPIAR TAGS ---
+  const [isCopyLotTagsModalOpen, setIsCopyLotTagsModalOpen] = useState(false)
+  const [pendingLotTags, setPendingLotTags] = useState<Record<string, string>>({})
 
   const [states, setStates] = useState<{ id: number; sigla: string; nome: string }[]>([])
   const [cities, setCities] = useState<{ id: number; nome: string }[]>([])
   const [selectedState, setSelectedState] = useState(editingItem?.state || '')
   const [selectedCity, setSelectedCity] = useState(editingItem?.city || '')
+
 
   // --- EFEITOS (Data Fetching) ---
   useEffect(() => {
@@ -404,30 +388,44 @@ function AuctionDetailPage() {
   // --- HANDLERS DE LOTES ---
   const handleAddLot = () => {
     setEditingLot(null)
+    setPendingLotTags({})
     setLotAction('create')
     setIsLotModalOpen(true)
   }
 
   const handleEditLot = (lot: Lot) => {
     setEditingLot(lot)
+    
+    // Extrai as tags master deste lote do estado global de scrapingConfigs
+    const masterTags: Record<string, string> = {}
+    scrapingConfigs.forEach(config => {
+      if (config.lotId === lot.id && config.itemId === null) {
+        const fieldKey = Object.entries(ITEM_FIELD_ENUM_MAP).find(
+          ([_, enumValue]) => enumValue === config.fieldType
+        )?.[0]
+        if (fieldKey) masterTags[fieldKey] = config.selector
+      }
+    })
+    
+    setPendingLotTags(masterTags)
     setLotAction('edit')
     setIsLotModalOpen(true)
   }
 
-  const handleSaveLot = async (formData: FormData) => {
+  const handleSaveLotFromModal = async (lotData: Partial<Lot>) => {
     if (!auctionId) return
     setIsLoading(true)
     try {
-      const lotData = { auctionId, identification: formData.get('identification') as string }
       if (lotAction === 'edit' && editingLot) {
         await updateLot(editingLot.id, lotData)
         toast.success('Lote atualizado com sucesso!')
       } else {
-        await createLot(lotData)
+        await createLot({ auctionId, ...lotData } as any)
         toast.success('Lote criado com sucesso!')
       }
       setIsLotModalOpen(false)
       await fetchData()
+      await fetchScrapingConfigs()
     } catch (error) {
       toast.error('Erro ao salvar lote')
     } finally {
@@ -436,7 +434,7 @@ function AuctionDetailPage() {
   }
 
   const handleDeleteLot = async (lotId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este lote? Esta ação não pode ser desfeita.')) return
+    if (!window.confirm('Tem certeza que deseja excluir este lote? Esta ação não pode ser desfeita.')) return
     setIsLoading(true)
     try {
       await deleteLot(lotId)
@@ -450,15 +448,15 @@ function AuctionDetailPage() {
   }
 
   // --- HANDLERS DE ITENS ---
-  const handleAddItem = (lotId: string) => {
-    setSelectedLotId(lotId)
-    setEditingItem(null)
-    setSelectedItemType('')
-    setPendingItemTags({}) // Resetar tags pendentes
-    setItemAction('create')
-    setIsItemModalOpen(true)
-  }
-
+const handleAddItem = (lotId: string) => {
+  setSelectedLotId(lotId)
+  setEditingItem(null)
+  setSelectedItemType('')
+  setPendingItemTags({}) // Não precisa mais de pendingItemTags customizados
+  setItemAction('create')
+  setIsItemModalOpen(true)
+}
+  
   const handleEditItem = (item: AuctionItem) => {
     setSelectedLotId(item.lotId)
     const normalizedImages = (item.images || []).map((img: any) =>
@@ -466,80 +464,146 @@ function AuctionDetailPage() {
     )
     setEditingItem({ ...item, images: normalizedImages })
     setSelectedItemType(item.type)
+    setPendingItemTags({})
     setItemAction('edit')
     setIsItemModalOpen(true)
   }
 
   // --- TAG MODAL HANDLERS ---
   const handleOpenTagModal = (field: string, item?: AuctionItem) => {
-    const itemId = item?.id ?? editingItem?.id ?? ''
-    openTagModalHook(field, itemId)
+    if (isLotModalOpen && editingLot) {
+      openTagModalHook(field, `lot:${editingLot.id}`)
+    } else {
+      const itemId = item?.id ?? editingItem?.id ?? 'create'
+      openTagModalHook(field, `item:${itemId}`)
+    }
   }
 
   const handleSaveTag = async (tagValue: string) => {
-    if (!selectedTagField) return
+    if (!selectedTagField || !auctionId) return
 
-    // Verifica se estamos editando um item existente (tem ID) ou criando um novo
-    if (selectedTagItemId) {
-      // --- MODO EDIÇÃO (Item já existe no banco) ---
-      if (!auctionId) return
-      setIsLoading(true)
-      try {
-        if (!tagValue || tagValue.trim() === '') {
-            // DELETAR: Busca a config correspondente na lista carregada
-            const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
-            const configToDelete = scrapingConfigs.find(c => c.itemId === selectedTagItemId && c.fieldType === enumType)
-            
-            if (configToDelete) {
-                await deleteScrapingConfig(configToDelete.id)
-                toast.info(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" removida.`)
-            }
-        } else {
-            // SALVAR
-            await saveScrapingConfig({
-                auctionId,
-                itemId: selectedTagItemId,
-                fieldName: selectedTagField,
-                selector: tagValue
-            })
-            toast.success(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" salva com sucesso!`)
-        }
-        await fetchScrapingConfigs()
-      } catch (error) {
-        toast.error('Erro ao processar configuração.')
-      } finally {
-        setIsLoading(false)
-        closeTagModal()
-      }
-    } else {
-      // --- MODO CRIAÇÃO (Item novo, ainda não salvo) ---
+    setIsLoading(true)
+    try {
+      const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
+      const [contextType, contextId] = (selectedTagItemId || '').split(':')
+      const isLotMode = contextType === 'lot'
+      
+      const targetLotId = isLotMode ? contextId : selectedLotId
+      const targetItemId = !isLotMode && contextId !== 'create' ? contextId : null
+      
       if (!tagValue || tagValue.trim() === '') {
-          // Se vazio, remove do objeto de tags pendentes
-          setPendingItemTags(prev => {
-              const newState = { ...prev }
-              delete newState[selectedTagField]
-              return newState
-          })
+        // --- DELETAR TAG ---
+        let configToDelete = null
+        if (isLotMode) {
+          configToDelete = scrapingConfigs.find(c => c.lotId === targetLotId && c.itemId === null && c.fieldType === enumType)
+        } else {
+          configToDelete = scrapingConfigs.find(c => c.itemId === targetItemId && c.fieldType === enumType)
+        }
+        
+        if (configToDelete) {
+          await deleteScrapingConfig(configToDelete.id)
+          toast.info(`Tag para "${ITEM_FIELD_LABELS[selectedTagField]}" removida.`)
+        }
+        
+        // Remove do state local
+        if (isLotMode) {
+          setPendingLotTags(prev => { const newState = { ...prev }; delete newState[selectedTagField]; return newState })
+        } else {
+          setPendingItemTags(prev => { const newState = { ...prev }; delete newState[selectedTagField]; return newState })
+        }
       } else {
-          // Se tem valor, atualiza o estado
+        // --- SALVAR TAG ---
+        await saveScrapingConfig({
+          auctionId,
+          lotId: targetLotId,
+          itemId: targetItemId,
+          fieldName: selectedTagField,
+          selector: tagValue
+        })
+        
+        // Atualiza o state local
+        if (isLotMode) {
+          setPendingLotTags(prev => ({ ...prev, [selectedTagField]: tagValue }))
+          toast.success(`Tag Master para "${ITEM_FIELD_LABELS[selectedTagField]}" salva!`)
+        } else {
           setPendingItemTags(prev => ({ ...prev, [selectedTagField]: tagValue }))
+          toast.success(`Tag (Override) para "${ITEM_FIELD_LABELS[selectedTagField]}" salva!`)
+        }
       }
+
+      await fetchScrapingConfigs()
+    } catch (error) {
+      toast.error('Erro ao processar configuração.')
+      console.error('Erro ao salvar tag:', error)
+    } finally {
+      setIsLoading(false)
       closeTagModal()
     }
   }
 
   const getCurrentSelector = () => {
-      if (!selectedTagField) return ''
+    if (!selectedTagField) return ''
 
+    const [contextType, contextId] = (selectedTagItemId || '').split(':')
+    const isLotMode = contextType === 'lot'
+    const targetLotId = isLotMode ? contextId : selectedLotId
+    const targetItemId = !isLotMode && contextId !== 'create' ? contextId : null
+
+    if (isLotMode) {
+      if (pendingLotTags[selectedTagField]) return pendingLotTags[selectedTagField]
+    } else {
+      if (pendingItemTags[selectedTagField]) return pendingItemTags[selectedTagField]
+    }
+
+    const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
+    
+    if (isLotMode) {
+      const config = scrapingConfigs.find(c => c.lotId === targetLotId && c.itemId === null && c.fieldType === enumType)
+      return config ? config.selector : ''
+    } else {
+      const config = scrapingConfigs.find(c => c.itemId === targetItemId && c.fieldType === enumType)
+      if (config) return config.selector
       
-      if (selectedTagItemId) {
-          const enumType = ITEM_FIELD_ENUM_MAP[selectedTagField]
-          const config = scrapingConfigs.find(c => c.itemId === selectedTagItemId && c.fieldType === enumType)
-          return config ? config.selector : ''
-      } 
+      // Fallback pra herança do lote se não tiver override
+      const lotConfig = scrapingConfigs.find(c => c.lotId === targetLotId && c.itemId === null && c.fieldType === enumType)
+      return lotConfig ? lotConfig.selector : ''
+    }
+  }
+
+  const handleCopyTagsFromLotStart = () => {
+    setIsCopyLotTagsModalOpen(true)
+  }
+
+  const handleCopyTagsFromLotConfirm = async (sourceLotId: string) => {
+    if (!editingLot) return
+    setIsLoading(true)
+    try {
+      await copyTagsBetweenLots(sourceLotId, editingLot.id)
+      toast.success('Tags copiadas com sucesso!')
+      setIsCopyLotTagsModalOpen(false)
+      await fetchScrapingConfigs()
+      await fetchData() // Recarrega os dados do lote também p/ atualizar urls
       
-      
-      return pendingItemTags[selectedTagField] || ''
+      // Atualiza as pending tags para mostrar no modal (já vai renderizar pois fetchScrapingConfigs terminou)
+      const masterTags: Record<string, string> = {}
+      const updatedConfigs = await getAllScrapingConfigs(auctionId!)
+      updatedConfigs.forEach(config => {
+        if (config.lotId === editingLot.id && config.itemId === null) {
+          const fieldKey = Object.entries(ITEM_FIELD_ENUM_MAP).find(
+            ([_, enumValue]) => enumValue === config.fieldType
+          )?.[0]
+          if (fieldKey) masterTags[fieldKey] = config.selector
+        }
+      })
+      setPendingLotTags(masterTags)
+      setScrapingConfigs(updatedConfigs)
+
+    } catch (error) {
+      toast.error('Erro ao copiar tags.')
+      console.error(error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleSaveItem = async (formData: FormData) => {
@@ -617,28 +681,13 @@ function AuctionDetailPage() {
 
       if (itemAction === 'edit' && editingItem) {
         await updateAuctionItem(editingItem.id, itemData)
-        targetItemId = editingItem.id
         toast.success('Item atualizado com sucesso!')
       } else {
-        const createdItem = await createAuctionItem(itemData)
-        targetItemId = createdItem?.id
+        await createAuctionItem(itemData)
         toast.success('Item criado com sucesso!')
       }
 
-      // Salva tags pendentes
-      if (targetItemId && auctionId && Object.keys(pendingItemTags).length > 0) {
-        await Promise.all(
-          Object.entries(pendingItemTags).map(([fieldName, selector]) => 
-            saveScrapingConfig({
-              auctionId: auctionId!,
-              itemId: targetItemId!,
-              fieldName: fieldName,
-              selector: selector
-            })
-          )
-        )
-      }
-
+      setPendingItemTags({})
       setIsItemModalOpen(false)
       await fetchData()
       await fetchScrapingConfigs()
@@ -648,6 +697,13 @@ function AuctionDetailPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleCancelItemModal = () => {
+    setPendingItemTags({})
+    setInitialPendingTags({})
+    setIsItemModalOpen(false)
+    closeTagModal()
   }
 
   const handleDeleteItem = async (itemId: string) => {
@@ -691,24 +747,41 @@ function AuctionDetailPage() {
   
   // --- HELPERS VISUAIS (Ícones de Config) ---
   const renderStatusIcon = (fieldName: string, item?: AuctionItem) => {
-    if (!item || !item.id) {
-        return <XIcon className="h-3 w-3 text-red-500 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
-    }
     const enumType = ITEM_FIELD_ENUM_MAP[fieldName]
-    const isConfigured = scrapingConfigs.some(c => c.itemId === item.id && c.fieldType === enumType)
     
-    if (isConfigured) {
-        return <Check className="h-3 w-3 text-blue-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+    // Check pending overriding tags
+    if (pendingItemTags[fieldName] && pendingItemTags[fieldName].trim().length > 0) {
+      return <span title="Tag Override"><Check className="h-3 w-3 text-blue-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" /></span>
     }
-    return <XIcon className="h-3 w-3 text-red-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" />
+    
+    // Check saved item tags
+    if (item?.id) {
+       const isConfigured = scrapingConfigs.some(c => c.itemId === item.id && c.fieldType === enumType)
+       if (isConfigured) return <span title="Tag Override Salva"><Check className="h-3 w-3 text-blue-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" /></span>
+    }
+    
+    // Check lot mastery tags (inherited)
+    const lotId = item?.lotId || selectedLotId
+    if (lotId) {
+       const hasMasterTag = scrapingConfigs.some(c => c.lotId === lotId && c.itemId === null && c.fieldType === enumType)
+       if (hasMasterTag) return <span title="Tag Master Herdadada do Lote"><Check className="h-3 w-3 text-green-600 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" /></span>
+    }
+
+    return <span title="Não Configurada"><XIcon className="h-3 w-3 text-red-900 absolute -top-1 -right-1 bg-white rounded-full border border-gray-100 shadow-sm" /></span>
   }
 
   const renderCogButton = (fieldName: string, item?: AuctionItem) => (
     <div className="relative inline-block ml-3">
-        <button type="button" className="text-gray-500 hover:text-gray-700 p-1 focus:outline-none" onClick={() => handleOpenTagModal(fieldName, item)}>
+        <button 
+           type="button" 
+           className={`p-1 focus:outline-none transition-colors ${itemAction === 'create' ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-700'}`} 
+           onClick={() => handleOpenTagModal(fieldName, item)}
+           disabled={itemAction === 'create'}
+           title={itemAction === 'create' ? 'Salve o item primeiro para configurar overrides de tags' : 'Configurar Tag'}
+        >
             <Cog className="h-4 w-4" />
         </button>
-        {renderStatusIcon(fieldName, item)}
+        {itemAction !== 'create' && renderStatusIcon(fieldName, item)}
     </div>
   )
 
@@ -918,30 +991,26 @@ function AuctionDetailPage() {
             </div>
           </div>
 
-          <Transition appear show={isLotModalOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-50" onClose={() => !isLoading && setIsLotModalOpen(false)}>
-              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/25" /></Transition.Child>
-              <div className="fixed inset-0 overflow-y-auto">
-                <div className="flex min-h-full items-center justify-center p-4 text-center">
-                  <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
-                    <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all">
-                      <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">{lotAction === 'create' ? 'Adicionar Lote' : 'Editar Lote'}</Dialog.Title>
-                      <form onSubmit={e => { e.preventDefault(); handleSaveLot(new FormData(e.currentTarget)) }} className="space-y-4">
-                        <div>
-                          <label htmlFor="identification" className="block text-sm font-medium text-gray-700 mb-1">Identificação do Lote <span className="text-red-500">*</span></label>
-                          <Input id="identification" name="identification" type="text" placeholder="Ex: Lote 001" defaultValue={editingLot?.identification} required disabled={isLoading} />
-                        </div>
-                        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
-                          <Button type="button" onClick={() => setIsLotModalOpen(false)} variant="neutral" disabled={isLoading}>Cancelar</Button>
-                          <Button type="submit" variant={lotAction === 'create' ? 'add' : 'primary'} disabled={isLoading}>{lotAction === 'create' ? 'Adicionar Lote' : 'Atualizar Lote'}</Button>
-                        </div>
-                      </form>
-                    </Dialog.Panel>
-                  </Transition.Child>
-                </div>
-              </div>
-            </Dialog>
-          </Transition>
+          <LotEditModal
+            isOpen={isLotModalOpen}
+            onClose={() => !isLoading && setIsLotModalOpen(false)}
+            action={lotAction}
+            lot={editingLot}
+            onSave={handleSaveLotFromModal}
+            isLoading={isLoading}
+            lotTags={pendingLotTags}
+            onOpenTagModal={handleOpenTagModal}
+            onCopyTagsRequest={handleCopyTagsFromLotStart}
+          />
+
+          <CopyLotTagsModal
+            isOpen={isCopyLotTagsModalOpen}
+            onClose={() => setIsCopyLotTagsModalOpen(false)}
+            currentLot={editingLot}
+            availableLots={lots}
+            onConfirm={handleCopyTagsFromLotConfirm}
+            isLoading={isLoading}
+          />
 
           <Transition appear show={isItemModalOpen} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={() => !isLoading && setIsItemModalOpen(false)}>
@@ -1233,7 +1302,7 @@ function AuctionDetailPage() {
                             </div>
 
                             <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
-                              <Button type="button" onClick={() => setIsItemModalOpen(false)} variant="neutral" disabled={isLoading}>Cancelar</Button>
+                              <Button type="button" onClick={handleCancelItemModal} variant="neutral" disabled={isLoading}>Cancelar</Button>
                               <Button type="submit" variant={itemAction === 'create' ? 'add' : 'primary'} disabled={isLoading}>{itemAction === 'create' ? 'Adicionar Item' : 'Atualizar Item'}</Button>
                             </div>
                           </div>
@@ -1254,6 +1323,7 @@ function AuctionDetailPage() {
             isLoading={isLoading}
             initialValue={getCurrentSelector()}
           />
+
 
         </div>
       </div>

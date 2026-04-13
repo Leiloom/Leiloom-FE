@@ -43,7 +43,6 @@ function AuctionsPage({ user }: Props) {
     const [filteredAuctions, setFilteredAuctions] = useState<Auction[]>([])
     const [loading, setLoading] = useState(true)
     const [showFilters, setShowFilters] = useState(false)
-    const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
     const [filters, setFilters] = useState<Filters>({
         search: '',
         auctionType: 'all',
@@ -85,10 +84,6 @@ function AuctionsPage({ user }: Props) {
     useEffect(() => {
         applyFilters()
     }, [filters, auctions, itemTypeParam])
-
-    useEffect(() => {
-        if (selectedAuction) router.push(`/auctions/${selectedAuction.id}`)
-    }, [selectedAuction, router])
 
     useEffect(() => {
         fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome')
@@ -333,7 +328,10 @@ function AuctionsPage({ user }: Props) {
                                 <div
                                     key={item.id}
                                     className="p-2 rounded-md bg-white border hover:shadow-sm cursor-pointer"
-                                    onClick={() => setSelectedAuction(auction)}
+                                    onClick={() => {
+                                        sessionStorage.setItem('selectedAuctionItemId', item.id);
+                                        router.push(`/auctions/${auction.id}`);
+                                    }}
                                 >
                                     <div className="text-sm font-medium text-gray-800">
                                         {item.title}

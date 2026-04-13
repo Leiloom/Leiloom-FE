@@ -4,7 +4,13 @@ import { CreateScrapingConfigDto, ScrapingConfigResponse } from '@/types/scrapin
 export async function saveScrapingConfig(
   data: CreateScrapingConfigDto
 ): Promise<ScrapingConfigResponse> {
-  const response = await api.post('/scraping-configs', data)
+  // Garante que itemId e lotId undefined virem null para o backend
+  const payload = {
+    ...data,
+    itemId: data.itemId || null,
+    lotId: data.lotId || null
+  }
+  const response = await api.post('/scraping-configs', payload)
   return response.data
 }
 
@@ -25,6 +31,21 @@ export async function getAllScrapingConfigs(
   const response = await api.get('/scraping-configs/all', {
     params: { auctionId },
   })
+  return response.data
+}
+
+export async function getScrapingConfigsByLot(lotId: string): Promise<ScrapingConfigResponse[]> {
+  const response = await api.get(`/scraping-configs/by-lot/${lotId}`)
+  return response.data
+}
+
+export async function getResolvedConfigsForItem(itemId: string): Promise<ScrapingConfigResponse[]> {
+  const response = await api.get(`/scraping-configs/resolved/${itemId}`)
+  return response.data
+}
+
+export async function copyTagsBetweenLots(sourceLotId: string, targetLotId: string): Promise<{ copied: number, message: string }> {
+  const response = await api.post('/scraping-configs/copy-lot', { sourceLotId, targetLotId })
   return response.data
 }
 
