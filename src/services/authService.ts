@@ -256,6 +256,7 @@ export async function validateCurrentPassword(password: string): Promise<{ valid
 export interface RequestPasswordResetDto {
   email: string
   context: 'BACKOFFICE' | 'CLIENT'
+  includeResetLink?: boolean
 }
 
 export interface ResetPasswordDto {

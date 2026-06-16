@@ -101,8 +101,10 @@ function UsersAdminPage({ user }: Props) {
     try {
       await requestPasswordReset({
         email: userEmail,
-        context: 'BACKOFFICE'
+        context: 'BACKOFFICE',
+        includeResetLink: true
       })
+      toast.success('Email de redefinição de senha enviado!')
     } catch (error: any) {
       toast.error('Erro ao enviar email de redefinição de senha.')
     } finally {
