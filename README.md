@@ -147,4 +147,3 @@ Responsável: Matheus Souza
 ├── postcss.config.js
 ├── tailwind.config.ts
 └── tsconfig.json
-commit dia 16-03-2026
