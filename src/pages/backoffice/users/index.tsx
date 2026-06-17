@@ -125,7 +125,8 @@ function UsersAdminPage({ user }: Props) {
         try {
           await requestPasswordReset({
             email: newUser.email,
-            context: 'BACKOFFICE'
+            context: 'BACKOFFICE',
+            includeResetLink: true
           })
           toast.success('Email de definição de senha enviado!')
         } catch {
