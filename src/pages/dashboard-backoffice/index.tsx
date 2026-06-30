@@ -412,7 +412,7 @@ function DashboardBackOffice({ user }: Props) {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h2>
               <div className="space-y-3">
                 <button
-                  onClick={() => router.push('/clientes/novo')}
+                  onClick={() => router.push('/backoffice/clients')}
                   className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition"
                 >
                   <div className="flex items-center justify-between">
@@ -430,7 +430,7 @@ function DashboardBackOffice({ user }: Props) {
                 </button>
 
                 <button
-                  onClick={() => router.push('/planos')}
+                  onClick={() => router.push('/backoffice/plans')}
                   className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition"
                 >
                   <div className="flex items-center justify-between">
@@ -448,7 +448,7 @@ function DashboardBackOffice({ user }: Props) {
                 </button>
 
                 <button
-                  onClick={() => router.push('/pagamentos')}
+                  onClick={() => router.push('/installments-client')}
                   className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition"
                 >
                   <div className="flex items-center justify-between">
@@ -466,7 +466,7 @@ function DashboardBackOffice({ user }: Props) {
                 </button>
 
                 <button
-                  onClick={() => router.push('/usuarios')}
+                  onClick={() => router.push('/backoffice/users')}
                   className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition"
                 >
                   <div className="flex items-center justify-between">
@@ -484,7 +484,7 @@ function DashboardBackOffice({ user }: Props) {
                 </button>
 
                 <button
-                  onClick={() => router.push('/relatorios')}
+                  onClick={() => router.push('/backoffice/auctions')}
                   className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition"
                 >
                   <div className="flex items-center justify-between">
