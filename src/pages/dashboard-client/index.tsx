@@ -8,7 +8,7 @@ import { TokenPayload } from '@/utils/jwtUtils'
 import { getClientDashboardData, ClientDashboardData } from '@/services/clientDashboardService'
 import { getDetailedPaymentSummary, DetailedPaymentSummary, getPendingPayments, PendingPayment } from '@/services/paymentService'
 import { toast } from 'react-toastify'
-import { CreditCard, AlertTriangle, CheckCircle, Clock, DollarSign } from 'lucide-react'
+import { CreditCard, AlertTriangle, CheckCircle, Clock, DollarSign, Settings, HelpCircle, History } from 'lucide-react'
 
 interface Props {
   user: TokenPayload
@@ -489,47 +489,67 @@ function DashboardClient({ user }: Props) {
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h2>
               <div className="space-y-3">
-                <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
+                <button onClick={() => router.push('/client-plan-control')} className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">Gerenciar Plano</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="h-8 w-8 bg-blue-100 rounded flex items-center justify-center">
+                        <CreditCard className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <span className="font-medium">Gerenciar Plano</span>
+                    </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">Alterar ou renovar seu plano</p>
+                  <p className="text-sm text-gray-600 mt-1 ml-11">Alterar ou renovar seu plano</p>
                 </button>
 
                 <button 
-                  onClick={() => router.push('/payments-client')}
+                  onClick={() => router.push('/installments-client')}
                   className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">Histórico de Pagamentos</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="h-8 w-8 bg-yellow-100 rounded flex items-center justify-center">
+                        <History className="h-4 w-4 text-yellow-600" />
+                      </div>
+                      <span className="font-medium">Histórico de Pagamentos</span>
+                    </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">Ver todos os pagamentos realizados</p>
+                  <p className="text-sm text-gray-600 mt-1 ml-11">Ver todos os pagamentos realizados</p>
                 </button>
 
-                <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
+                <button onClick={() => router.push('/profile')} className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">Configurações</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="h-8 w-8 bg-purple-100 rounded flex items-center justify-center">
+                        <Settings className="h-4 w-4 text-purple-600" />
+                      </div>
+                      <span className="font-medium">Configurações</span>
+                    </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">Editar informações da conta</p>
+                  <p className="text-sm text-gray-600 mt-1 ml-11">Editar informações da conta</p>
                 </button>
 
-                <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
+                <button onClick={() => window.location.href = 'mailto:suporte@leiloom.com'} className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">Suporte</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="h-8 w-8 bg-orange-100 rounded flex items-center justify-center">
+                        <HelpCircle className="h-4 w-4 text-orange-600" />
+                      </div>
+                      <span className="font-medium">Suporte</span>
+                    </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">Precisa de ajuda? Entre em contato</p>
+                  <p className="text-sm text-gray-600 mt-1 ml-11">Precisa de ajuda? Entre em contato</p>
                 </button>
               </div>
             </div>
