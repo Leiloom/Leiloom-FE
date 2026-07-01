@@ -495,7 +495,7 @@ function DashboardClient({ user }: Props) {
                       <div className="h-8 w-8 bg-blue-100 rounded flex items-center justify-center">
                         <CreditCard className="h-4 w-4 text-blue-600" />
                       </div>
-                      <span className="font-medium">Gerenciar Plano</span>
+                      <span className="font-medium text-gray-900">Gerenciar Plano</span>
                     </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -513,7 +513,7 @@ function DashboardClient({ user }: Props) {
                       <div className="h-8 w-8 bg-yellow-100 rounded flex items-center justify-center">
                         <History className="h-4 w-4 text-yellow-600" />
                       </div>
-                      <span className="font-medium">Histórico de Pagamentos</span>
+                      <span className="font-medium text-gray-900">Histórico de Pagamentos</span>
                     </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -528,7 +528,7 @@ function DashboardClient({ user }: Props) {
                       <div className="h-8 w-8 bg-purple-100 rounded flex items-center justify-center">
                         <Settings className="h-4 w-4 text-purple-600" />
                       </div>
-                      <span className="font-medium">Configurações</span>
+                      <span className="font-medium text-gray-900">Configurações</span>
                     </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -543,7 +543,7 @@ function DashboardClient({ user }: Props) {
                       <div className="h-8 w-8 bg-orange-100 rounded flex items-center justify-center">
                         <HelpCircle className="h-4 w-4 text-orange-600" />
                       </div>
-                      <span className="font-medium">Suporte</span>
+                      <span className="font-medium text-gray-900">Suporte</span>
                     </div>
                     <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
