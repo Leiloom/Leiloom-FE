@@ -17,7 +17,7 @@ import { useDynamicTitle } from '@/hooks/useDynamicTitle'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
 import { Cog, Check, X as XIcon } from 'lucide-react'
-import { Auction, CreateAuctionData, AuctionType } from '@/types/auction'
+import { Auction, CreateAuctionData, AuctionClassification, AuctionType } from '@/types/auction'
 import { useTagModal } from '../../../hooks/useTagModel'
 import TagConfigModal from '@/components/shared/TagConfigModal'
 import { saveScrapingConfig } from '@/services/scrapingConfigService'
@@ -45,13 +45,18 @@ function AuctionsAdminPage() {
   const [newAuction, setNewAuction] = useState<CreateAuctionData>({
     name: '',
     type: AuctionType.ONLINE,
+    classification: AuctionClassification.NAO_DEFINIDO,
+    identification: '',
     url: '',
     openingDate: '',
     closingDate: '',
     createdBy: 'system',
   })
 
-  const filtered = auctions.filter(a => a.name.toLowerCase().includes(search.toLowerCase()) || a.type.toLowerCase().includes(search.toLowerCase()))
+  const filtered = auctions.filter(a => {
+    const haystack = `${a.name} ${a.identification || ''} ${a.classification || ''} ${a.type}`.toLowerCase()
+    return haystack.includes(search.toLowerCase())
+  })
   const { currentPage, totalPages, paginatedData, goToPage, resetToFirstPage } = usePagedData(filtered, 10)
 
   async function loadAuctions() {
@@ -72,7 +77,16 @@ function AuctionsAdminPage() {
   }
 
   const columns = [
-    { key: 'name', header: 'Nome' },
+    {
+      key: 'name',
+      header: 'Nome',
+      render: (_: unknown, auction: Auction) => (
+        <div>
+          <div className="font-medium text-gray-900">{auction.name}{auction.identification ? ` (${auction.identification})` : ''}</div>
+          <div className="text-xs text-gray-500">{auction.classification ? `Classificação: ${auction.classification}` : 'Classificação: Não definido'}</div>
+        </div>
+      )
+    },
     { key: 'type', header: 'Tipo' },
     { key: 'openingDate', header: 'Abertura', render: (value: any) => formatDate(value) },
     { key: 'closingDate', header: 'Encerramento', render: (value: any) => formatDate(value) },
@@ -81,7 +95,7 @@ function AuctionsAdminPage() {
 
   function handleNewAuction() {
 
-    setNewAuction({ name: '', type: AuctionType.ONLINE, url: '', openingDate: '', closingDate: '', createdBy: 'system' })
+    setNewAuction({ name: '', type: AuctionType.ONLINE, classification: AuctionClassification.NAO_DEFINIDO, identification: '', url: '', openingDate: '', closingDate: '', createdBy: 'system' })
     setPendingTags({})
     setIsOpenModal(true)
   }
@@ -89,16 +103,7 @@ function AuctionsAdminPage() {
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
-    // 🔹 Validação Manual de Datas (Criação)
-    if (!newAuction.openingDate) {
-        toast.warning('A Data de Abertura é obrigatória.')
-        return
-    }
-    if (!newAuction.closingDate) {
-        toast.warning('A Data de Encerramento é obrigatória.')
-        return
-    }
-    if (new Date(newAuction.openingDate) > new Date(newAuction.closingDate)) {
+    if (newAuction.openingDate && newAuction.closingDate && new Date(newAuction.openingDate) > new Date(newAuction.closingDate)) {
         toast.warning('A Data de Abertura não pode ser maior que Data de Encerramento.')
         return
     }
@@ -185,8 +190,22 @@ function AuctionsAdminPage() {
                       <div>
                         <div className="flex items-center justify-between mb-1"><label className="block text-sm font-medium text-gray-700">Tipo do Leilão</label>{renderCogButton('type')}</div>
                         <select value={newAuction.type} onChange={(e) => setNewAuction({ ...newAuction, type: e.target.value as AuctionType })} className="w-full border text-gray-700 border-gray-300 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" disabled={isLoading}>
-                          <option value={AuctionType.ONLINE}>Online</option><option value={AuctionType.LOCAL}>Presencial</option>
+                          <option value={AuctionType.ONLINE}>Online</option><option value={AuctionType.LOCAL}>Presencial</option><option value={AuctionType.NAO_DEFINIDO}>Não definido</option>
                         </select>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Classificação</label>
+                          <select value={newAuction.classification || AuctionClassification.NAO_DEFINIDO} onChange={(e) => setNewAuction({ ...newAuction, classification: e.target.value as AuctionClassification })} className="w-full border text-gray-700 border-gray-300 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" disabled={isLoading}>
+                            <option value={AuctionClassification.NAO_DEFINIDO}>Não definido</option>
+                            <option value={AuctionClassification.JUDICIAL}>Judicial</option>
+                            <option value={AuctionClassification.EXTRAJUDICIAL}>Extrajudicial</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Identificação Única</label>
+                          <Input id="identification" name="identification" type="text" value={newAuction.identification || ''} onChange={(e) => setNewAuction({ ...newAuction, identification: e.target.value })} disabled={isLoading} placeholder="Ex.: LEILAO-2026-001" />
+                        </div>
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1"><label className="block text-sm font-medium text-gray-700">URL</label>{renderCogButton('url')}</div>
@@ -194,11 +213,11 @@ function AuctionsAdminPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <div className="flex items-center justify-between mb-1"><label className="block text-sm font-medium text-gray-700">Data de Abertura <span className="text-red-500">*</span></label>{renderCogButton('openingDate')}</div>
+                          <div className="flex items-center justify-between mb-1"><label className="block text-sm font-medium text-gray-700">Data de Abertura</label>{renderCogButton('openingDate')}</div>
                           <Input id="openingDate" name="openingDate" type="datetime-local" value={newAuction.openingDate} onChange={(e) => setNewAuction({ ...newAuction, openingDate: e.target.value })} disabled={isLoading} />
                         </div>
                         <div>
-                          <div className="flex items-center justify-between mb-1"><label className="block text-sm font-medium text-gray-700">Data de Encerramento <span className="text-red-500">*</span></label>{renderCogButton('closingDate')}</div>
+                          <div className="flex items-center justify-between mb-1"><label className="block text-sm font-medium text-gray-700">Data de Encerramento</label>{renderCogButton('closingDate')}</div>
                           <Input id="closingDate" name="closingDate" type="datetime-local" value={newAuction.closingDate} onChange={(e) => setNewAuction({ ...newAuction, closingDate: e.target.value })} disabled={isLoading} />
                         </div>
                       </div>
