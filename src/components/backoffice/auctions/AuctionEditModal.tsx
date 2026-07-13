@@ -7,6 +7,7 @@ import { useTagModal } from '../../../hooks/useTagModel'
 import TagConfigModal from '@/components/shared/TagConfigModal'
 import { saveScrapingConfig, getAllScrapingConfigs, deleteScrapingConfig } from '@/services/scrapingConfigService'
 import { toast } from 'react-toastify'
+import { AuctionClassification, AuctionType } from '@/types/auction'
 
 const AUCTION_FIELD_LABELS: Record<string, string> = {
   name: 'Nome do Leilão',
@@ -41,7 +42,9 @@ export default function AuctionEditModal({
 }: AuctionEditModalProps) {
     const [formData, setFormData] = useState({
         name: '',
-        type: 'ONLINE',
+        type: AuctionType.ONLINE,
+        classification: AuctionClassification.NAO_DEFINIDO,
+        identification: '',
         url: '',
         openingDate: '',
         closingDate: '',
@@ -77,6 +80,8 @@ export default function AuctionEditModal({
             setFormData({
                 name: auction.name || '',
                 type: auction.type || 'ONLINE',
+                classification: auction.classification || AuctionClassification.NAO_DEFINIDO,
+                identification: auction.identification || '',
                 url: auction.url || '',
                 openingDate: auction.openingDate ? new Date(auction.openingDate).toISOString().slice(0, 16) : '',
                 closingDate: auction.closingDate ? new Date(auction.closingDate).toISOString().slice(0, 16) : '',
@@ -125,29 +130,20 @@ export default function AuctionEditModal({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
 
-        // 🔹 Validação Manual de Datas
-        if (!formData.openingDate) {
-            toast.warning('A Data de Abertura é obrigatória.')
-            return
-        }
-        if (!formData.closingDate) {
-            toast.warning('A Data de Encerramento é obrigatória.')
-            return
-        }
+        if (formData.openingDate && formData.closingDate) {
+            const start = new Date(formData.openingDate)
+            const end = new Date(formData.closingDate)
 
-        const start = new Date(formData.openingDate)
-        const end = new Date(formData.closingDate)
-
-        if (start >= end) {
-            toast.warning('A Data de Abertura não pode ser maior ou igual à Data de Encerramento.')
-            formData.closingDate = ''
-            return
+            if (start >= end) {
+                toast.warning('A Data de Abertura não pode ser maior ou igual à Data de Encerramento.')
+                return
+            }
         }
 
         onSave({
             ...formData,
-            openingDate: new Date(formData.openingDate).toISOString(),
-            closingDate: new Date(formData.closingDate).toISOString(),
+            openingDate: formData.openingDate ? new Date(formData.openingDate).toISOString() : null,
+            closingDate: formData.closingDate ? new Date(formData.closingDate).toISOString() : null,
             updatedBy: 'system',
         })
     }
@@ -211,9 +207,25 @@ export default function AuctionEditModal({
                                                     {renderCogButton('type')}
                                                 </div>
                                                 <select id="type" value={formData.type} onChange={(e) => handleInputChange('type', e.target.value)} required disabled={isLoading} className="w-full border border-gray-300 rounded-md shadow-sm text-gray-900 p-2 focus:ring-yellow-500 focus:border-yellow-500">
-                                                    <option value="ONLINE">Online</option>
-                                                    <option value="LOCAL">Presencial</option>
+                                                    <option value={AuctionType.ONLINE}>Online</option>
+                                                    <option value={AuctionType.LOCAL}>Presencial</option>
+                                                    <option value={AuctionType.NAO_DEFINIDO}>Não definido</option>
                                                 </select>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label htmlFor="classification" className="block text-sm font-medium text-gray-700 mb-1">Classificação</label>
+                                                    <select id="classification" value={formData.classification} onChange={(e) => handleInputChange('classification', e.target.value)} disabled={isLoading} className="w-full border border-gray-300 rounded-md shadow-sm text-gray-900 p-2 focus:ring-yellow-500 focus:border-yellow-500">
+                                                        <option value={AuctionClassification.NAO_DEFINIDO}>Não definido</option>
+                                                        <option value={AuctionClassification.JUDICIAL}>Judicial</option>
+                                                        <option value={AuctionClassification.EXTRAJUDICIAL}>Extrajudicial</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label htmlFor="identification" className="block text-sm font-medium text-gray-700 mb-1">Identificação Única</label>
+                                                    <Input id="identification" name="identification" type="text" value={formData.identification} onChange={(e) => handleInputChange('identification', e.target.value)} disabled={isLoading} placeholder="Ex.: LEILAO-2026-001" />
+                                                </div>
                                             </div>
 
                                             <div>
@@ -230,14 +242,14 @@ export default function AuctionEditModal({
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <div className='flex items-center justify-between mb-1'>
-                                                        <label htmlFor="openingDate" className="block text-sm font-medium text-gray-700 mb-1"><Clock className="inline h-4 w-4 mr-1" />Data/Hora de Abertura <span className="text-red-500">*</span></label>
+                                                        <label htmlFor="openingDate" className="block text-sm font-medium text-gray-700 mb-1"><Clock className="inline h-4 w-4 mr-1" />Data/Hora de Abertura</label>
                                                         {renderCogButton('openingDate')}
                                                     </div>
                                                     <Input id="openingDate" name="openingDate" type="datetime-local" value={formData.openingDate} onChange={(e) => handleInputChange('openingDate', e.target.value)} required disabled={isLoading} />
                                                 </div>
                                                 <div>
                                                     <div className='flex items-center justify-between mb-1'>
-                                                        <label htmlFor="closingDate" className="block text-sm font-medium text-gray-700 mb-1"><Clock className="inline h-4 w-4 mr-1" />Data/Hora de Encerramento <span className="text-red-500">*</span></label>
+                                                        <label htmlFor="closingDate" className="block text-sm font-medium text-gray-700 mb-1"><Clock className="inline h-4 w-4 mr-1" />Data/Hora de Encerramento</label>
                                                         {renderCogButton('closingDate')}
                                                     </div>
                                                     <Input id="closingDate" name="closingDate" type="datetime-local" value={formData.closingDate} onChange={(e) => handleInputChange('closingDate', e.target.value)} required disabled={isLoading} />

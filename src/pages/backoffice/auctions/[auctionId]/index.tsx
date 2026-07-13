@@ -325,8 +325,11 @@ function AuctionDetailPage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price)
   }
 
-  const formatDateTime = (dateString: string): string => {
-    return new Date(dateString).toLocaleString('pt-BR', {
+  const formatDateTime = (dateString?: string | null): string => {
+    if (!dateString) return 'Não informada'
+    const parsed = new Date(dateString)
+    if (Number.isNaN(parsed.getTime())) return 'Não informada'
+    return parsed.toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
     })
   }
@@ -336,9 +339,10 @@ function AuctionDetailPage() {
     if (!auction.isActive) return { status: 'inactive', label: 'Inativo', color: 'red' }
 
     const now = new Date()
-    const opening = new Date(auction.openingDate)
-    const closing = new Date(auction.closingDate)
+    const opening = auction.openingDate ? new Date(auction.openingDate) : null
+    const closing = auction.closingDate ? new Date(auction.closingDate) : null
 
+    if (!opening || !closing) return { status: 'unknown', label: 'Sem período definido', color: 'gray' }
     if (now < opening) return { status: 'scheduled', label: 'Programado', color: 'blue' }
     if (now >= opening && now <= closing) return { status: 'active', label: 'Em Andamento', color: 'green' }
     return { status: 'closed', label: 'Encerrado', color: 'gray' }
@@ -612,6 +616,7 @@ const handleAddItem = (lotId: string) => {
       const itemData: any = {
         lotId: selectedLotId,
         title: formData.get('title') as string,
+        identification: (formData.get('identification') as string || '').trim() || undefined,
         description: formData.get('description') as string,
         type: formData.get('type') as string,
         basePrice: parseFloat(formData.get('basePrice') as string),
@@ -842,6 +847,11 @@ const handleAddItem = (lotId: string) => {
                     <div>
                       <h1 className={`text-2xl font-bold ${auctionStatus.color === 'green' ? 'text-green-900' : auctionStatus.color === 'blue' ? 'text-blue-900' : auctionStatus.color === 'red' ? 'text-red-900' : 'text-gray-900'}`}>
                         {auction.name}
+                        {auction.identification ? (
+                          <span className={`ml-2 text-lg font-medium ${auctionStatus.color === 'green' ? 'text-green-900' : auctionStatus.color === 'blue' ? 'text-blue-900' : auctionStatus.color === 'red' ? 'text-red-900' : 'text-gray-900'}`}>
+                            ({auction.identification})
+                          </span>
+                        ) : null}
                       </h1>
                       <p className={`text-sm ${auctionStatus.color === 'green' ? 'text-green-700' : auctionStatus.color === 'blue' ? 'text-blue-700' : auctionStatus.color === 'red' ? 'text-red-700' : 'text-gray-700'}`}>
                         Status: {auctionStatus.label}
@@ -926,8 +936,13 @@ const handleAddItem = (lotId: string) => {
                           </button>
                           <FolderOpen className="h-5 w-5 text-blue-600" />
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900">{lot.identification}</h3>
-                            <p className="text-sm text-gray-600">{lot.items?.length || 0} itens</p>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              Lote
+                              {lot.identification ? <span className="ml-2 font-medium text-gray-700">({lot.identification})</span> : null}
+                            </h3>
+                            <p className="text-sm text-gray-600">
+                              {lot.items?.length || 0} itens
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -963,7 +978,7 @@ const handleAddItem = (lotId: string) => {
                             <tbody className="bg-white divide-y divide-gray-200">
                               {lot.items.sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime()).map((item) => (
                                 <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                                  <td className="px-6 py-4"><div className="text-sm font-medium text-gray-900 truncate">{item.title}</div></td>
+                                  <td className="px-6 py-4"><div className="text-sm font-medium text-gray-900 truncate">{item.title}</div>{item.identification ? <div className="text-xs text-gray-700 mt-1">Identificação Única: {item.identification}</div> : null}</td>
                                   <td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center text-sm text-gray-900">{getItemTypeIcon(item.type)}<span className="ml-2">{getItemTypeLabel(item.type)}</span></div></td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{formatPrice(item.basePrice)}</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatPrice(item.increment)}</td>
@@ -1044,6 +1059,11 @@ const handleAddItem = (lotId: string) => {
                                 <option value="OUTROS">Outros</option>
                               </select>
                             </div>
+                          </div>
+
+                          <div>
+                            <label htmlFor="identification" className="block text-sm font-medium text-gray-700 mb-1">Identificação Única do Item</label>
+                            <Input id="identification" name="identification" type="text" defaultValue={editingItem?.identification || ''} disabled={isLoading} placeholder="Ex.: ITEM-001" />
                           </div>
 
                           <div>
