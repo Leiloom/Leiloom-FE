@@ -5,7 +5,7 @@
 - **Next.js** (v15.3.1): Framework React para renderização híbrida (SSR + SSG)
 - **React** (v19): Biblioteca principal para construção de interfaces
 - **Tailwind CSS** (v4.1.4): Framework de estilização com classes utilitárias
-- **TypeScript**: Tipagem estática para maior robustez e previsibilidade
+- **TypeScript**: Tipagem estática para maior robustez e previsibilidade 
 - **Heroicons**: Biblioteca de ícones SVG compatível com Tailwind e React
  
 ---
