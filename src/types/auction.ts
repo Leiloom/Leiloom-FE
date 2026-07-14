@@ -1,6 +1,13 @@
 export enum AuctionType {
   ONLINE = 'ONLINE',
-  LOCAL = 'LOCAL'
+  LOCAL = 'LOCAL',
+  NAO_DEFINIDO = 'NAO_DEFINIDO'
+}
+
+export enum AuctionClassification {
+  JUDICIAL = 'JUDICIAL',
+  EXTRAJUDICIAL = 'EXTRAJUDICIAL',
+  NAO_DEFINIDO = 'NAO_DEFINIDO'
 }
 
 export enum ItemType {
@@ -52,6 +59,7 @@ export interface AuctionItem {
   title: string
   description?: string
   type: ItemType
+  identification?: string
   basePrice: number
   increment: number
   status: ItemStatus
@@ -88,7 +96,9 @@ export interface Auction {
   id: string
   name: string
   type: AuctionType
+  classification?: AuctionClassification
   url?: string
+  identification?: string
   openingDate: string
   closingDate: string
   isActive: boolean
@@ -105,9 +115,11 @@ export interface Auction {
 export interface CreateAuctionData {
   name: string
   type: AuctionType
+  classification?: AuctionClassification
+  identification?: string
   url?: string
-  openingDate: string
-  closingDate: string
+  openingDate?: string
+  closingDate?: string
   createdBy?: string
 }
 
@@ -144,6 +156,7 @@ export interface CreateAuctionItemData {
   title: string
   description?: string
   type: ItemType
+  identification?: string
   basePrice: number | string
   increment: number | string
   status?: ItemStatus
