@@ -6,8 +6,9 @@ import { Calendar, Clock, X, Cog, Check, X as XIcon } from 'lucide-react'
 import { useTagModal } from '../../../hooks/useTagModel'
 import TagConfigModal from '@/components/shared/TagConfigModal'
 import { saveScrapingConfig, getAllScrapingConfigs, deleteScrapingConfig } from '@/services/scrapingConfigService'
+import { getAuctionSources } from '@/services/auctionSourceService'
 import { toast } from 'react-toastify'
-import { AuctionClassification, AuctionType } from '@/types/auction'
+import { AuctionClassification, AuctionSource, AuctionType } from '@/types/auction'
 
 const AUCTION_FIELD_LABELS: Record<string, string> = {
   name: 'Nome do Leilão',
@@ -48,10 +49,12 @@ export default function AuctionEditModal({
         url: '',
         openingDate: '',
         closingDate: '',
+        auctionSourceId: '',
     })
 
     const [isSavingTag, setIsSavingTag] = useState(false)
     const [existingConfigs, setExistingConfigs] = useState<any[]>([])
+    const [auctionSources, setAuctionSources] = useState<AuctionSource[]>([])
 
     const { 
         isOpen: isTagModalOpen, 
@@ -76,6 +79,14 @@ export default function AuctionEditModal({
     }, [isOpen, auction])
 
     useEffect(() => {
+        if (isOpen) {
+            getAuctionSources().then(setAuctionSources).catch(() => {
+                toast.error('Erro ao carregar as fontes de leilão.')
+            })
+        }
+    }, [isOpen])
+
+    useEffect(() => {
         if (auction) {
             setFormData({
                 name: auction.name || '',
@@ -85,6 +96,7 @@ export default function AuctionEditModal({
                 url: auction.url || '',
                 openingDate: auction.openingDate ? new Date(auction.openingDate).toISOString().slice(0, 16) : '',
                 closingDate: auction.closingDate ? new Date(auction.closingDate).toISOString().slice(0, 16) : '',
+                auctionSourceId: auction.auctionSourceId || '',
             })
         }
     }, [auction])
@@ -144,6 +156,7 @@ export default function AuctionEditModal({
             ...formData,
             openingDate: formData.openingDate ? new Date(formData.openingDate).toISOString() : null,
             closingDate: formData.closingDate ? new Date(formData.closingDate).toISOString() : null,
+            auctionSourceId: formData.auctionSourceId || null,
             updatedBy: 'system',
         })
     }
@@ -226,6 +239,16 @@ export default function AuctionEditModal({
                                                     <label htmlFor="identification" className="block text-sm font-medium text-gray-700 mb-1">Identificação Única</label>
                                                     <Input id="identification" name="identification" type="text" value={formData.identification} onChange={(e) => handleInputChange('identification', e.target.value)} disabled={isLoading} placeholder="Ex.: LEILAO-2026-001" />
                                                 </div>
+                                            </div>
+
+                                            <div>
+                                                <label htmlFor="auctionSourceId" className="block text-sm font-medium text-gray-700 mb-1">Fonte do Leilão</label>
+                                                <select id="auctionSourceId" value={formData.auctionSourceId} onChange={(e) => handleInputChange('auctionSourceId', e.target.value)} disabled={isLoading} className="w-full border border-gray-300 rounded-md shadow-sm text-gray-900 p-2 focus:ring-yellow-500 focus:border-yellow-500">
+                                                    <option value="">Não definida</option>
+                                                    {auctionSources.filter(s => s.isActive || s.id === formData.auctionSourceId).map(source => (
+                                                        <option key={source.id} value={source.id}>{source.name}</option>
+                                                    ))}
+                                                </select>
                                             </div>
 
                                             <div>
