@@ -12,12 +12,13 @@ import { DataTable } from '@/components/shared/DataTable'
 import { ActionButton } from '@/components/shared/ActionButton'
 import { usePagedData } from '@/hooks/usePagedData'
 import { getAuctions, createAuction } from '@/services/auctionService'
+import { getAuctionSources } from '@/services/auctionSourceService'
 import { SearchBar } from '@/components/shared/SearchBar'
 import { useDynamicTitle } from '@/hooks/useDynamicTitle'
 import { Input } from '@/components/shared/Input'
 import { Button } from '@/components/shared/Button'
 import { Cog, Check, X as XIcon } from 'lucide-react'
-import { Auction, CreateAuctionData, AuctionClassification, AuctionType } from '@/types/auction'
+import { Auction, AuctionSource, CreateAuctionData, AuctionClassification, AuctionType } from '@/types/auction'
 import { useTagModal } from '../../../hooks/useTagModel'
 import TagConfigModal from '@/components/shared/TagConfigModal'
 import { saveScrapingConfig } from '@/services/scrapingConfigService'
@@ -35,6 +36,7 @@ function AuctionsAdminPage() {
   const router = useRouter()
 
   const [auctions, setAuctions] = useState<Auction[]>([])
+  const [auctionSources, setAuctionSources] = useState<AuctionSource[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [isOpenModal, setIsOpenModal] = useState(false)
@@ -51,6 +53,7 @@ function AuctionsAdminPage() {
     openingDate: '',
     closingDate: '',
     createdBy: 'system',
+    auctionSourceId: '',
   })
 
   const filtered = auctions.filter(a => {
@@ -68,7 +71,14 @@ function AuctionsAdminPage() {
     } catch { toast.error('Erro ao carregar leilões.') } finally { setIsLoading(false) }
   }
 
-  useEffect(() => { loadAuctions() }, [])
+  async function loadAuctionSources() {
+    try {
+      const data = await getAuctionSources()
+      setAuctionSources(data)
+    } catch { toast.error('Erro ao carregar as fontes de leilão.') }
+  }
+
+  useEffect(() => { loadAuctions(); loadAuctionSources() }, [])
 
   function formatDate(dateString: string) {
     if (!dateString) return '-'
@@ -84,6 +94,7 @@ function AuctionsAdminPage() {
         <div>
           <div className="font-medium text-gray-900">{auction.name}{auction.identification ? ` (${auction.identification})` : ''}</div>
           <div className="text-xs text-gray-500">{auction.classification ? `Classificação: ${auction.classification}` : 'Classificação: Não definido'}</div>
+          <div className="text-xs text-gray-500">Fonte: {auction.auctionSource?.name || 'Não definida'}</div>
         </div>
       )
     },
@@ -95,7 +106,7 @@ function AuctionsAdminPage() {
 
   function handleNewAuction() {
 
-    setNewAuction({ name: '', type: AuctionType.ONLINE, classification: AuctionClassification.NAO_DEFINIDO, identification: '', url: '', openingDate: '', closingDate: '', createdBy: 'system' })
+    setNewAuction({ name: '', type: AuctionType.ONLINE, classification: AuctionClassification.NAO_DEFINIDO, identification: '', url: '', openingDate: '', closingDate: '', createdBy: 'system', auctionSourceId: '' })
     setPendingTags({})
     setIsOpenModal(true)
   }
@@ -110,7 +121,7 @@ function AuctionsAdminPage() {
 
     setIsLoading(true)
     try {
-      const createdAuction = await createAuction(newAuction)
+      const createdAuction = await createAuction({ ...newAuction, auctionSourceId: newAuction.auctionSourceId || undefined })
       if (createdAuction && createdAuction.id && Object.keys(pendingTags).length > 0) {
         await Promise.all(Object.entries(pendingTags).map(([fieldName, selector]) => saveScrapingConfig({ auctionId: createdAuction.id, fieldName, selector, itemId: null })))
       }
@@ -206,6 +217,15 @@ function AuctionsAdminPage() {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Identificação Única</label>
                           <Input id="identification" name="identification" type="text" value={newAuction.identification || ''} onChange={(e) => setNewAuction({ ...newAuction, identification: e.target.value })} disabled={isLoading} placeholder="Ex.: LEILAO-2026-001" />
                         </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Fonte do Leilão</label>
+                        <select value={newAuction.auctionSourceId || ''} onChange={(e) => setNewAuction({ ...newAuction, auctionSourceId: e.target.value })} className="w-full border text-gray-700 border-gray-300 rounded-md shadow-sm p-2 focus:ring-yellow-500 focus:border-yellow-500" disabled={isLoading}>
+                          <option value="">Não definida</option>
+                          {auctionSources.filter(s => s.isActive || s.id === newAuction.auctionSourceId).map(source => (
+                            <option key={source.id} value={source.id}>{source.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1"><label className="block text-sm font-medium text-gray-700">URL</label>{renderCogButton('url')}</div>

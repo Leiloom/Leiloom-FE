@@ -92,6 +92,15 @@ export interface Lot {
   items?: AuctionItem[]
 }
 
+export interface AuctionSource {
+  id: string
+  name: string
+  url: string
+  isActive: boolean
+  createdOn?: string
+  updatedOn?: string
+}
+
 export interface Auction {
   id: string
   name: string
@@ -106,6 +115,8 @@ export interface Auction {
   createdOn: string
   updatedBy?: string
   updatedOn?: string
+  auctionSourceId?: string
+  auctionSource?: AuctionSource
 
   lots?: Lot[]
   items?: AuctionItem[]
@@ -121,6 +132,7 @@ export interface CreateAuctionData {
   openingDate?: string
   closingDate?: string
   createdBy?: string
+  auctionSourceId?: string
 }
 
 export interface CreateLotData {
