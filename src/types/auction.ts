@@ -97,7 +97,9 @@ export interface AuctionSource {
   name: string
   url: string
   isActive: boolean
+  createdBy?: string
   createdOn?: string
+  updatedBy?: string
   updatedOn?: string
 }
 
