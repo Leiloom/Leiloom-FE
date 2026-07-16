@@ -170,6 +170,7 @@ function AuctionSourcesAdminPage() {
                         handleSave({
                           name: data.get('name') as string,
                           url: data.get('url') as string,
+                          identification: (data.get('identification') as string) || undefined,
                           isActive: data.get('isActive') === 'on',
                         })
                       }}
@@ -182,6 +183,10 @@ function AuctionSourcesAdminPage() {
                       <div>
                         <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">URL <span className="text-red-500">*</span></label>
                         <Input id="url" name="url" type="text" required placeholder="https://www.exemplo.com.br" defaultValue={editingSource?.url || ''} disabled={isLoading} />
+                      </div>
+                      <div>
+                        <label htmlFor="identification" className="block text-sm font-medium text-gray-700 mb-1">Identificação Única</label>
+                        <Input id="identification" name="identification" type="text" placeholder="Ex.: FONTE-2026-001" defaultValue={editingSource?.identification || ''} disabled={isLoading} />
                       </div>
                       <div className="flex items-start">
                         <div className="flex items-center h-5">
