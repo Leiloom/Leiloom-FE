@@ -5,9 +5,9 @@
 - **Next.js** (v15.3.1): Framework React para renderização híbrida (SSR + SSG)
 - **React** (v19): Biblioteca principal para construção de interfaces
 - **Tailwind CSS** (v4.1.4): Framework de estilização com classes utilitárias
-- **TypeScript**: Tipagem estática para maior robustez e previsibilidade
-- **Heroicons**: Biblioteca de ícones SVG compatível com Tailwind e React
-
+- **TypeScript**: Tipagem estática para maior robustez e previsibilidade  
+- **Heroicons**: Biblioteca de ícones SVG compatível com Tailwind e React 
+ 
 ---
 
 ## 🌐 Estrutura de Pastas
@@ -150,4 +150,5 @@ Responsável: Matheus Souza
 
 commit dia 16-03-2026
 commit dia 13-04-2026
-
+commit dia 09/07/2026
+commit 14/07/2026 

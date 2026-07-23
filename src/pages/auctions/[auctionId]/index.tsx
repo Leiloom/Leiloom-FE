@@ -108,6 +108,7 @@ function AuctionDetailPage({ user }: Props) {
 
       setAuction({
         ...auctionData,
+        type: auctionData.type as "ONLINE" | "LOCAL",
         lots: (auctionData.lots ?? []).map((lot: any) => ({
           ...lot,
           items: lot.items ?? []

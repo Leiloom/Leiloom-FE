@@ -17,7 +17,8 @@ import {
   UserGroupIcon,
   ScaleIcon,
   BuildingOfficeIcon,
-  TruckIcon 
+  TruckIcon,
+  GlobeAltIcon
 } from '@heroicons/react/20/solid'
 import { useRouter } from 'next/navigation'
 import { useAuthContext } from '@/contexts/AuthContext'
@@ -87,6 +88,10 @@ export default function Navbar() {
             <Link href="/dashboard-backoffice" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <HomeIcon className="h-4 w-4" />
               Dashboard
+            </Link>
+            <Link href="/backoffice/auction-sources" className="flex items-center gap-2 hover:text-yellow-400 transition">
+              <GlobeAltIcon className="h-4 w-4" />
+              Fontes de Leilão
             </Link>
             <Link href="/backoffice/auctions" className="flex items-center gap-2 hover:text-yellow-400 transition">
               <ScaleIcon className="h-4 w-4" />
@@ -246,6 +251,14 @@ export default function Navbar() {
                   >
                   <HomeIcon className="h-5 w-5" />
                   Dashboard
+                </Link>
+                <Link
+                  href="/backoffice/auction-sources"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-yellow-600 text-base"
+                >
+                  <GlobeAltIcon className="h-5 w-5" />
+                  Fontes de Leilão
                 </Link>
                 <Link
                   href="/backoffice/auctions"
