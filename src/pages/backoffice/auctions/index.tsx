@@ -81,9 +81,12 @@ function AuctionsAdminPage() {
       key: 'name',
       header: 'Nome',
       render: (_: unknown, auction: Auction) => (
-        <div>
-          <div className="font-medium text-gray-900">{auction.name}{auction.identification ? ` (${auction.identification})` : ''}</div>
-          <div className="text-xs text-gray-500">{auction.classification ? `Classificação: ${auction.classification}` : 'Classificação: Não definido'}</div>
+        <div className="min-w-0 max-w-[420px]">
+          <div className="font-medium text-gray-900 break-words leading-snug">{auction.name}</div>
+          {auction.identification ? (
+            <div className="text-[11px] text-gray-500 mt-1">Identificação: {auction.identification}</div>
+          ) : null}
+          <div className="text-[11px] text-gray-500 mt-1">{auction.classification ? `Classificação: ${auction.classification}` : 'Classificação: Não definido'}</div>
         </div>
       )
     },

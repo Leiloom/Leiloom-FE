@@ -78,7 +78,7 @@ export function DataTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[600px]">
+      <table className="w-full">
         <thead className="bg-gray-50">
           <tr>
             {columns.map((column) => (
@@ -93,9 +93,9 @@ export function DataTable({
         </thead>
         <tbody className="divide-y divide-gray-200">
           {data.map((item, index) => (
-            <tr key={item.id || index} className="hover:bg-gray-50">
+            <tr key={item.id || index} className="hover:bg-gray-50 align-top">
               {columns.map((column) => (
-                <td key={column.key} className="px-6 py-4 whitespace-nowrap text-gray-500">
+                <td key={column.key} className="px-6 py-4 text-gray-500 align-top break-words whitespace-normal">
                   {column.render
                     ? column.render(item[column.key], item)
                     : item[column.key] || '-'}
