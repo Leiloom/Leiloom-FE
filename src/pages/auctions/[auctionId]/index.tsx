@@ -217,8 +217,8 @@ function AuctionDetailPage({ user }: Props) {
               >
                 <ArrowLeft className="h-5 w-5 text-gray-600" />
               </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{auction.name}</h1>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold text-gray-900 break-words leading-snug">{auction.name}</h1>
                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                   <div className="flex items-center gap-1">
                     {auction.type === 'ONLINE' ? (

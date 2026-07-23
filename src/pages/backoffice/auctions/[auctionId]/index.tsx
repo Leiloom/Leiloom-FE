@@ -842,17 +842,17 @@ const handleAddItem = (lotId: string) => {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className='bg-gray-50 border-gray-200 border rounded-lg p-6'>
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-3 min-w-0">
                     <CheckCircle className={`h-6 w-6 ${auctionStatus.color === 'green' ? 'text-green-600' : auctionStatus.color === 'blue' ? 'text-blue-600' : auctionStatus.color === 'red' ? 'text-red-600' : 'text-gray-600'}`} />
-                    <div>
-                      <h1 className={`text-2xl font-bold ${auctionStatus.color === 'green' ? 'text-green-900' : auctionStatus.color === 'blue' ? 'text-blue-900' : auctionStatus.color === 'red' ? 'text-red-900' : 'text-gray-900'}`}>
+                    <div className="min-w-0">
+                      <h1 className={`text-2xl font-bold break-words leading-snug ${auctionStatus.color === 'green' ? 'text-green-900' : auctionStatus.color === 'blue' ? 'text-blue-900' : auctionStatus.color === 'red' ? 'text-red-900' : 'text-gray-900'}`}>
                         {auction.name}
-                        {auction.identification ? (
-                          <span className={`ml-2 text-lg font-medium ${auctionStatus.color === 'green' ? 'text-green-900' : auctionStatus.color === 'blue' ? 'text-blue-900' : auctionStatus.color === 'red' ? 'text-red-900' : 'text-gray-900'}`}>
-                            ({auction.identification})
-                          </span>
-                        ) : null}
                       </h1>
+                      {auction.identification ? (
+                        <div className={`mt-1 text-lg font-medium break-words ${auctionStatus.color === 'green' ? 'text-green-900' : auctionStatus.color === 'blue' ? 'text-blue-900' : auctionStatus.color === 'red' ? 'text-red-900' : 'text-gray-900'}`}>
+                          ({auction.identification})
+                        </div>
+                      ) : null}
                       <p className={`text-sm ${auctionStatus.color === 'green' ? 'text-green-700' : auctionStatus.color === 'blue' ? 'text-blue-700' : auctionStatus.color === 'red' ? 'text-red-700' : 'text-gray-700'}`}>
                         Status: {auctionStatus.label}
                       </p>

@@ -8,6 +8,7 @@ import { TokenPayload } from '@/utils/jwtUtils'
 import { getAllClients } from '@/services/clientService'
 import { getAllClientUsers } from '@/services/clientUserService'
 import { getAllPlans } from '@/services/planService'
+import { getAuctions } from '@/services/auctionService'
 import { toast } from 'react-toastify'
 import { 
   Users, 
@@ -35,6 +36,8 @@ interface DashboardStats {
   totalUsers: number
   totalPlans: number
   activePlans: number
+  totalAuctions: number
+  activeAuctions: number
   monthlyRevenue: number
   pendingPayments: number
 }
@@ -56,6 +59,8 @@ function DashboardBackOffice({ user }: Props) {
     totalUsers: 0,
     totalPlans: 0,
     activePlans: 0,
+    totalAuctions: 0,
+    activeAuctions: 0,
     monthlyRevenue: 0,
     pendingPayments: 0
   })
@@ -71,15 +76,17 @@ function DashboardBackOffice({ user }: Props) {
       setLoading(true)
 
       // Carrega dados em paralelo
-      const [clientsResult, usersResult, plansResult] = await Promise.allSettled([
+      const [clientsResult, usersResult, plansResult, auctionsResult] = await Promise.allSettled([
         getAllClients(),
         getAllClientUsers(),
-        getAllPlans()
+        getAllPlans(),
+        getAuctions()
       ])
 
       let clients: any[] = []
       let users: any[] = []
       let plans: any[] = []
+      let auctions: any[] = []
 
       if (clientsResult.status === 'fulfilled') {
         clients = clientsResult.value
@@ -93,6 +100,10 @@ function DashboardBackOffice({ user }: Props) {
         plans = plansResult.value
       }
 
+      if (auctionsResult.status === 'fulfilled') {
+        auctions = auctionsResult.value
+      }
+
       // Calcula estatísticas
       const totalClients = clients.length
       const activeClients = clients.filter(c => c.status === 'APPROVED').length
@@ -100,6 +111,8 @@ function DashboardBackOffice({ user }: Props) {
       const totalUsers = users.length
       const totalPlans = plans.length
       const activePlans = plans.filter(p => p.isActive).length
+      const totalAuctions = auctions.length
+      const activeAuctions = auctions.filter(a => a.isActive && a.closingDate && new Date(a.closingDate).getTime() > Date.now()).length
 
       // Simula receita mensal (você pode integrar com dados reais de pagamento)
       const monthlyRevenue = activeClients * 99.90 // Valor exemplo
@@ -112,6 +125,8 @@ function DashboardBackOffice({ user }: Props) {
         totalUsers,
         totalPlans,
         activePlans,
+        totalAuctions,
+        activeAuctions,
         monthlyRevenue,
         pendingPayments
       })
@@ -289,7 +304,7 @@ function DashboardBackOffice({ user }: Props) {
           </div>
 
           {/* Cards Secundários */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
             {/* Usuários Cadastrados */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center justify-between mb-4">
@@ -324,6 +339,25 @@ function DashboardBackOffice({ user }: Props) {
                 <>
                   <p className="text-2xl font-bold text-gray-900 mb-2">{stats.activePlans}</p>
                   <p className="text-sm text-gray-600">{stats.totalPlans} planos no total</p>
+                </>
+              )}
+            </div>
+
+            {/* Leilões */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Leilões</h3>
+                <FileText className="h-5 w-5 text-gray-400" />
+              </div>
+              {loading ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900 mb-2">{stats.totalAuctions}</p>
+                  <p className="text-sm text-gray-600">{stats.activeAuctions} ativos no momento</p>
                 </>
               )}
             </div>

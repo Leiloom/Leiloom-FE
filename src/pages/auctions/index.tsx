@@ -313,8 +313,8 @@ function AuctionsPage({ user }: Props) {
                     className="p-4 cursor-pointer flex justify-between items-center hover:bg-gray-50"
                     onClick={() => setIsOpen(!isOpen)}
                 >
-                    <div>
-                        <div className="font-semibold text-gray-900 line-clamp-1">
+                    <div className="min-w-0 pr-3">
+                        <div className="font-semibold text-gray-900 break-words leading-snug">
                             {auction.name}
                         </div>
                     </div>
