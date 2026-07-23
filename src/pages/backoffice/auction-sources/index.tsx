@@ -99,7 +99,18 @@ function AuctionSourcesAdminPage() {
   }
 
   const columns = [
-    { key: 'name', header: 'Nome' },
+    {
+      key: 'name',
+      header: 'Nome',
+      render: (_: unknown, source: AuctionSource) => (
+        <div className="min-w-0 max-w-[420px]">
+          <div className="font-medium text-gray-900 break-words leading-snug whitespace-normal">{source.name}</div>
+          {source.identification ? (
+            <div className="text-[11px] text-gray-500 mt-1 break-words leading-snug">Identificação: {source.identification}</div>
+          ) : null}
+        </div>
+      )
+    },
     {
       key: 'url', header: 'URL', render: (url: string) => (
         <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{url}</a>
